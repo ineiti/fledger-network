@@ -3,6 +3,7 @@ use yew::services::IntervalService;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+
 use std::time::Duration;
 
 use logger::LoggerOutput;
@@ -30,6 +31,8 @@ struct Model {
 enum Msg {
     UpdateLog,
     Connect,
+    List,
+    Ping,
     Node(Result<Node, JsValue>),
 }
 
@@ -69,21 +72,14 @@ impl Component for Model {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::UpdateLog => {}
-            Msg::Connect => match &self.node {
-                None => {}
-                Some(n) => {
-                    let node_copy = Arc::clone(&n);
-                    wasm_bindgen_futures::spawn_local(async move {
-                        let mut node = node_copy.lock().unwrap();
-                        node.connect().await;
-                    });
-                }
-            },
+            Msg::Connect => self.node_connect(),
             Msg::Node(res_node) => {
                 if let Ok(node) = res_node {
                     self.node = Some(Arc::new(Mutex::new(node)));
                 }
             }
+            Msg::List => self.node_list(),
+            Msg::Ping => self.node_ping(),
         }
         true
     }
@@ -101,13 +97,51 @@ impl Component for Model {
             <div class="main">
                 <div class="ui">
                     <div>
-                        <button onclick=self.link.callback(|_| Msg::UpdateLog)>{ "Update Log" }</button>
-                        <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
-                        <pre>{"log:"}
+                        <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect to Server" }</button>
+                        <button onclick=self.link.callback(|_| Msg::List)>{ "List Nodes" }</button>
+                        <button onclick=self.link.callback(|_| Msg::Ping)>{ "Ping Nodes" }</button>
+                        <pre class="wrap">{"log:"}
                         { str }</pre>
                     </div>
                 </div>
             </div>
+        }
+    }
+}
+
+impl Model {
+    fn node_copy<'a>(&self) -> Option<Arc<Mutex<Node>>>{
+        if let Some(n) = &self.node{
+            Some(Arc::clone(&n))
+        } else {
+            None
+        }
+    }
+
+    fn node_connect(&self){
+        if let Some(n) = self.node_copy(){
+            wasm_bindgen_futures::spawn_local(async move {
+                let mut node = n.lock().unwrap();
+                node.connect().await;
+            });
+        }
+    }
+
+    fn node_list(&self) {
+        if let Some(n) = self.node_copy() {
+            wasm_bindgen_futures::spawn_local(async move {
+                let mut node = n.lock().unwrap();
+                node.connect().await;
+            });
+        }
+    }
+
+    fn node_ping(&self) {
+        if let Some(n) = self.node_copy() {
+            wasm_bindgen_futures::spawn_local(async move {
+                let mut node = n.lock().unwrap();
+                node.connect().await;
+            });
         }
     }
 }
