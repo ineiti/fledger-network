@@ -1,9 +1,6 @@
-
-
-
 use common::config::NodeInfo;
-use common::rest::PostWebRTC;use common::types::U256;
-use rand;
+use common::rest::PostWebRTC;
+use common::types::U256;
 
 /// Information held by the REST service to allow other nodes to connect.
 /// TODO: allow to connect to any node.
@@ -34,12 +31,12 @@ impl NodeList {
     }
 
     pub fn get_new_idle(&mut self) -> U256 {
-        let u: U256 = rand::random();
+        let u = U256::rnd();
         // let u = [1u8; 32];
         while self.idle_ids.len() >= MAX_NEW_IDS {
             self.idle_ids.pop();
         }
-        self.idle_ids.push(u);
+        self.idle_ids.push(u.clone());
         return u;
     }
 
@@ -74,8 +71,11 @@ impl NodeList {
 #[cfg(test)]
 mod tests {
 
+    use common::config::NodeInfo;
+    use common::rest::PostWebRTC;
+
     use super::NodeList;
-    use crate::{config::NodeInfo, rest::PostWebRTC};
+    use common::types::U256;
 
     #[test]
     fn get_new_idle() {
@@ -102,7 +102,7 @@ mod tests {
         assert_eq!(
             true,
             nl.add_node(PostWebRTC {
-                list_id: [0u8; 32],
+                list_id: U256::rnd(),
                 node: n1.clone(),
             })
             .is_err()
@@ -114,7 +114,7 @@ mod tests {
         assert_eq!(
             true,
             nl.add_node(PostWebRTC {
-                list_id: [0u8; 32],
+                list_id: U256::rnd(),
                 node: n1.clone(),
             })
             .is_err()
@@ -125,7 +125,7 @@ mod tests {
         assert_eq!(
             true,
             nl.add_node(PostWebRTC {
-                list_id: id1,
+                list_id: id1.clone(),
                 node: n1.clone(),
             })
             .is_ok()
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(
             false,
             nl.add_node(PostWebRTC {
-                list_id: id1,
+                list_id: id1.clone(),
                 node: n1.clone(),
             })
             .is_ok()
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(
             false,
             nl.add_node(PostWebRTC {
-                list_id: id1,
+                list_id: id1.clone(),
                 node: n2.clone(),
             })
             .is_ok()
@@ -158,7 +158,7 @@ mod tests {
         assert_eq!(
             true,
             nl.add_node(PostWebRTC {
-                list_id: id2,
+                list_id: id2.clone(),
                 node: n1.clone(),
             })
             .is_ok()
@@ -169,7 +169,7 @@ mod tests {
         assert_eq!(
             false,
             nl.add_node(PostWebRTC {
-                list_id: id2,
+                list_id: id2.clone(),
                 node: n2.clone(),
             })
             .is_ok()

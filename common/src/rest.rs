@@ -20,6 +20,37 @@ pub struct GetWebRTC {
     pub list: Vec<NodeInfo>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PostConnectNode {
+    pub node: U256,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GetConnectNode {
+    pub node: U256,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GetConnectNodeReply {
+    pub nodes: Vec<U256>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PostPeerSend{
+    pub to: U256,
+    pub offer: Option<String>,
+    pub candidate: Option<String>,
+    pub answer: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PostPeerReceive{
+    pub from: U256,
+    pub offer: Option<String>,
+    pub candidate: Option<String>,
+    pub answer: Option<String>,
+}
+
 pub struct RestClient {
     rest: Box<dyn RestCaller>,
 }
