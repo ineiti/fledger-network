@@ -1,5 +1,4 @@
 use common::config::NodeInfo;
-use common::rest::PostWebRTC;
 use common::types::U256;
 
 /// Information held by the REST service to allow other nodes to connect.
@@ -32,7 +31,6 @@ impl NodeList {
 
     pub fn get_new_idle(&mut self) -> U256 {
         let u = U256::rnd();
-        // let u = [1u8; 32];
         while self.idle_ids.len() >= MAX_NEW_IDS {
             self.idle_ids.pop();
         }

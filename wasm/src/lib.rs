@@ -14,9 +14,9 @@ use yew::prelude::*;
 mod logs;
 mod logger;
 mod node;
-mod rest;
 mod tests;
 mod web_rtc;
+mod web_socket;
 
 // use rest::demo;
 // use web_rtc::demo;

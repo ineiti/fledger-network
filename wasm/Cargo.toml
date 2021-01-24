@@ -52,4 +52,13 @@ features = [
   "RtcDataChannel",
   "RtcDataChannelEvent",
   "RtcDataChannelState",
+
+  "BinaryType",
+  "Blob",
+  "ErrorEvent",
+  "FileReader",
+  "MessageEvent",
+  "ProgressEvent",
+  "WebSocket",
+
 ]

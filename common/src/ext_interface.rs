@@ -12,23 +12,6 @@ pub trait Logger {
     fn error(&self, s: &str);
 }
 
-pub enum RestMethod {
-    Get,
-    Post,
-    Put,
-    Delete,
-}
-
-#[async_trait(?Send)]
-pub trait RestCaller {
-    async fn call(
-        &self,
-        method: RestMethod,
-        path: String,
-        data: Option<String>,
-    ) -> Result<String, String>;
-}
-
 #[async_trait(?Send)]
 pub trait WebRTCCaller {
     async fn call(
