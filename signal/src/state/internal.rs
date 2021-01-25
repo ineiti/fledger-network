@@ -45,39 +45,58 @@ impl Internal {
     fn opened_ws(&self) {}
 
     fn receive_msg(&mut self, entry: &U256, msg: String) {
-        let msg_ws: WebSocketMessage = serde_json::from_str(&msg).unwrap();
+        let msg_ws = match WebSocketMessage::from_str(&msg) {
+            Ok(mw) => mw,
+            Err(e) => {
+                self.logger.error(&format!(
+                    "Couldn't parse message as WebSocketMessage: {:?}",
+                    e
+                ));
+                return;
+            }
+        };
 
         match msg_ws.msg {
             // Node sends his information to the server
-            Message::Announce(node) => {
+            Message::Announce(msg_ann) => {
+                self.logger
+                    .info(&format!("Storing node {:?}", msg_ann.node_info));
+                let public = msg_ann.node_info.public.clone();
+                self.nodes.retain(|_, ni| {
+                    if let Some(info) = ni.info.clone(){
+                        return info.public != public;
+                    }
+                    return true;
+                });
                 self.nodes
                     .entry(entry.clone())
-                    .and_modify(|ne| ne.info = Some(node));
+                    .and_modify(|ne| ne.info = Some(msg_ann.node_info));
+                self.logger.info(&format!("Final list is {:?}", self.nodes));
             }
 
             // Node requests deleting of the list of all nodes
             // TODO: remove this after debugging is done
             Message::ClearNodes => {
+                self.logger.info("Clearing nodes");
                 self.nodes.clear();
             }
 
             // Node requests a list of all currently connected nodes,
             // including itself.
             Message::ListIDsRequest => {
+                self.logger.info("Sending list IDs");
                 let ids: Vec<NodeInfo> = self
                     .nodes
                     .iter()
                     .filter(|ne| ne.1.info.is_some())
                     .map(|ne| ne.1.info.clone().unwrap())
                     .collect();
-                let msg_str = serde_json::to_string(&Message::ListIDsReply(ids)).unwrap();
-                self.nodes
-                    .entry(entry.clone())
-                    .and_modify(|ne| executor::block_on(ne.conn.send(msg_str)).unwrap());
+                self.send_message(entry, Message::ListIDsReply(ids));
             }
 
             // Node sends a PeerRequest with some of the data set to 'Some'.
             Message::PeerRequest(pr) => {
+                self.logger.info(&format!("Got a PeerRequest {:?}", pr));
                 self.nodes.entry(entry.clone()).and_modify(|ne| {
                     ne.peers.insert(pr.node.clone(), pr.clone());
                 });

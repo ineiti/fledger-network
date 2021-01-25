@@ -12,13 +12,10 @@ use std::{
     sync::{Arc, Mutex},
     thread,
 };
-use tungstenite::{accept, protocol::Role, Message, WebSocket};
+use tungstenite::{accept, protocol::Role, WebSocket, Message};
 
-use common::websocket::{NewConnectionCallback, WebSocketConnectionSend, WebSocketServer};
-use common::{
-    ext_interface::Logger,
-    websocket::{MessageCallbackSend, WSMessage},
-};
+use common::websocket::{WSMessage, NewConnectionCallback, WebSocketConnectionSend, WebSocketServer};
+use common::{ext_interface::Logger, websocket::MessageCallbackSend};
 use state::ServerState;
 
 fn main() {
@@ -99,12 +96,11 @@ impl UnixWSConnection {
         let mut ws_clone = WebSocket::from_raw_socket(ts_clone, Role::Server, None);
         thread::spawn(move || loop {
             let msg = ws_clone.read_message().unwrap();
-            println!("Got a message: {:?}", msg);
+            println!("Got a raw message: {:?}", msg);
             if msg.is_text() {
                 let mut cb_mutex = cb_clone.lock().unwrap();
                 if let Some(cb) = cb_mutex.as_mut() {
-                    let ws: WSMessage = serde_json::from_str(msg.to_text().unwrap()).unwrap();
-                    cb(ws);
+                    cb(WSMessage::MessageString(msg.to_text().unwrap().to_string()));
                 }
             }
         });

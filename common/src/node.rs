@@ -27,6 +27,7 @@ impl Node {
         storage.save(CONFIG_NAME, &config.to_string()?)?;
         logger.info("Config saved");
         logger.info(&format!("Starting node: {}", config.our_node.public));
+        network.set_node_info(config.our_node.clone());
 
         Ok(Node {
             info: config.our_node,
@@ -43,18 +44,20 @@ impl Node {
             .send(U256::rnd(), serde_json::to_string(&WebSocketMessage {
                 msg: Message::ClearNodes,
             }).unwrap())
-            .await
             .map(|_| ())
     }
 
-    pub async fn connect(&mut self) {
-        self.logger.info("Connecting to server");
-        self.network
-            .send(U256::rnd(), serde_json::to_string(&WebSocketMessage {
-                msg: Message::Announce(self.info.clone()),
-            }).unwrap())
-            .await
-            .unwrap();
-        self.logger.info("Successfully announced at server");
+    pub async fn list(&mut self) {
+        self.network.update_node_list()
+    }
+
+    pub async fn ping(&mut self) {
+        for node in &self.network.get_list(){
+            self.logger.info(&format!("Contacting node {:?}", node));
+            match self.network.send(node.public.clone(), "ping".to_string()){
+                Ok(_) => {self.logger.info("Successfully sent ping")}
+                Err(e) => {self.logger.error(&format!("Error while sending ping: {:?}", e))}
+            }
+        }
     }
 }

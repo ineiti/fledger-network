@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use common::ext_interface::WebRTCCaller;
-use common::ext_interface::WebRTCCallerState;use common::ext_interface::WebRTCMethod;
-
+use common::ext_interface::WebRTCCallerState;
+use common::ext_interface::WebRTCMethod;
 
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -18,9 +18,8 @@ use web_sys::{
     RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit,
 };
 
-
-
-use crate::logs::wait_ms;fn log(s: &str) {
+use crate::logs::wait_ms;
+fn log(s: &str) {
     log_1(&JsValue::from_str(s));
 }
 
@@ -355,7 +354,7 @@ fn dc_create_init(
     let dc = rp_conn.create_data_channel("data-channel");
     dc_onmessage(&dc.clone(), send);
     let (dc_send, dc_rcv) = mpsc::sync_channel::<RtcDataChannel>(1);
-    dc_send.send(dc);
+    dc_send.send(dc).map_err(|err| err.to_string())?;
     Ok(dc_rcv)
 }
 

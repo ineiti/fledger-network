@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use std::{cell::RefCell, rc::Rc};
 
-use common::{web_rtc::WebSocketMessage, websocket::WSMessage};
 use common::websocket::MessageCallback;
+use common::websocket::WSMessage;
 use common::websocket::WebSocketConnection;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -33,7 +33,7 @@ impl WebSocketWasm {
                 let s: String = txt.into();
                 console_log!("message event, received Text: {:?}", s);
                 // cb_clone.borrow_mut().and_then(|mut cb| {cb(wsm); Some(cb)});
-                if let Some(cb) = cb_clone.borrow_mut().as_deref_mut(){
+                if let Some(cb) = cb_clone.borrow_mut().as_deref_mut() {
                     cb(WSMessage::MessageString(s));
                 }
             } else {
@@ -48,7 +48,7 @@ impl WebSocketWasm {
         let cb_clone = wsw.cb.clone();
         let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
             console_log!("error event: {:?}", e);
-            if let Some(cb) = cb_clone.borrow_mut().as_deref_mut(){
+            if let Some(cb) = cb_clone.borrow_mut().as_deref_mut() {
                 let s: String = e.to_string().into();
                 cb(WSMessage::Error(s));
             }
@@ -59,7 +59,7 @@ impl WebSocketWasm {
         let cb_clone = wsw.cb.clone();
         let onopen_callback = Closure::wrap(Box::new(move |_| {
             console_log!("socket opened");
-            if let Some(cb) = cb_clone.borrow_mut().as_deref_mut(){
+            if let Some(cb) = cb_clone.borrow_mut().as_deref_mut() {
                 cb(WSMessage::Opened("".to_string()));
             }
         }) as Box<dyn FnMut(JsValue)>);
@@ -71,10 +71,10 @@ impl WebSocketWasm {
 
 #[async_trait(?Send)]
 impl WebSocketConnection for WebSocketWasm {
-    async fn send(&mut self, msg: String) -> Result<(), String> {
+    fn send(&mut self, msg: String) -> Result<(), String> {
         let _ = self
             .ws
-            .send_with_str(&serde_json::to_string(&msg).map_err(|e| e.to_string())?);
+            .send_with_str(&msg);
         Ok(())
     }
 

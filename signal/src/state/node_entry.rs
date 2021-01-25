@@ -7,7 +7,7 @@ use common::{
 };
 
 use futures::executor;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 pub struct NodeEntry {
     pub conn: Box<dyn WebSocketConnectionSend>,
@@ -15,6 +15,13 @@ pub struct NodeEntry {
     pub peers: HashMap<U256, PeerInfo>,
     entry: U256,
     logger: Box<dyn Logger>,
+}
+
+impl fmt::Debug for NodeEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("NodeEntry: {:?}", self.info))?;
+        Ok(())
+    }
 }
 
 impl NodeEntry {

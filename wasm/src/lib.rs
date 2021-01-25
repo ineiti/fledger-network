@@ -14,13 +14,15 @@ use yew::prelude::*;
 mod logs;
 mod logger;
 mod node;
-mod tests;
+// mod tests;
 mod web_rtc;
 mod web_socket;
 
 // use rest::demo;
 // use web_rtc::demo;
 use node::start;
+
+const URL: &str = "ws://localhost:8765";
 
 struct Model {
     link: ComponentLink<Self>,
@@ -30,7 +32,6 @@ struct Model {
 
 enum Msg {
     UpdateLog,
-    Connect,
     List,
     Ping,
     Node(Result<Node, JsValue>),
@@ -51,7 +52,7 @@ impl Component for Model {
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         let (logger, node_logger) = LoggerOutput::new();
         wasm_bindgen_futures::spawn_local(wrap(
-            start(Box::new(node_logger)),
+            start(Box::new(node_logger), URL),
             link.callback(|n: Result<Node, JsValue>| Msg::Node(n)),
         ));
         wasm_bindgen_futures::spawn_local(wrap_short(LoggerOutput::listen(
@@ -72,7 +73,6 @@ impl Component for Model {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::UpdateLog => {}
-            Msg::Connect => self.node_connect(),
             Msg::Node(res_node) => {
                 if let Ok(node) = res_node {
                     self.node = Some(Arc::new(Mutex::new(node)));
@@ -97,7 +97,6 @@ impl Component for Model {
             <div class="main">
                 <div class="ui">
                     <div>
-                        <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect to Server" }</button>
                         <button onclick=self.link.callback(|_| Msg::List)>{ "List Nodes" }</button>
                         <button onclick=self.link.callback(|_| Msg::Ping)>{ "Ping Nodes" }</button>
                         <pre class="wrap">{"log:"}
@@ -118,20 +117,20 @@ impl Model {
         }
     }
 
-    fn node_connect(&self){
-        if let Some(n) = self.node_copy(){
-            wasm_bindgen_futures::spawn_local(async move {
-                let mut node = n.lock().unwrap();
-                node.connect().await;
-            });
-        }
-    }
+    // fn node_connect(&self){
+    //     if let Some(n) = self.node_copy(){
+    //         wasm_bindgen_futures::spawn_local(async move {
+    //             let mut node = n.lock().unwrap();
+    //             node.connect().await;
+    //         });
+    //     }
+    // }
 
     fn node_list(&self) {
         if let Some(n) = self.node_copy() {
             wasm_bindgen_futures::spawn_local(async move {
                 let mut node = n.lock().unwrap();
-                node.connect().await;
+                node.list().await;
             });
         }
     }
@@ -140,7 +139,7 @@ impl Model {
         if let Some(n) = self.node_copy() {
             wasm_bindgen_futures::spawn_local(async move {
                 let mut node = n.lock().unwrap();
-                node.connect().await;
+                node.ping().await;
             });
         }
     }

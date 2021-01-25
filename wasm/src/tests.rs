@@ -4,6 +4,7 @@ use common::web_rtc::WebRTCClient;
 use wasm_bindgen::prelude::*;
 
 use crate::web_rtc::WebRTCCallerWasm;
+
 pub async fn test_webrtc() -> Result<(), JsValue> {
     // Set up two PCs - one needs to have init == true, the other init == false
     let pc1 = WebRTCCallerWasm::new(WebRTCCallerState::Initializer)?;

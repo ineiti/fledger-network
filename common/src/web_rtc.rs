@@ -18,6 +18,16 @@ pub struct WebSocketMessage {
     pub msg: Message,
 }
 
+impl WebSocketMessage{
+    pub fn from_str(s: &str) -> Result<WebSocketMessage, String>{
+        serde_json::from_str(s).map_err(|err| err.to_string())
+    }
+
+    pub fn to_string(&self) -> String{
+        serde_json::to_string(self).unwrap()
+    }
+}
+
 /// Message is a list of messages to be sent between the node and the signal server.
 /// When a new node connects to the signalling server, the server starts by sending
 /// a "Challenge" to the node.
@@ -33,13 +43,20 @@ pub struct WebSocketMessage {
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     Challenge(U256),
-    Announce(NodeInfo),
+    Announce(MessageAnnounce),
     ListIDsRequest,
     ListIDsReply(Vec<NodeInfo>),
     ClearNodes,
     PeerRequest(PeerInfo),
     PeerReply(PeerInfo),
     Done,
+}
+
+/// TODO: add a signature on the challenge
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MessageAnnounce{
+    pub challenge: U256,
+    pub node_info: NodeInfo,
 }
 
 pub struct WebRTCClient {
