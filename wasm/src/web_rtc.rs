@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
-use common::ext_interface::WebRTCCaller;
-use common::ext_interface::WebRTCCallerState;
+use common::ext_interface::WebRTCConnection;
+use common::ext_interface::WebRTCConnectionState;
 use common::ext_interface::WebRTCMethod;
 
 use std::sync::mpsc;
@@ -24,8 +24,8 @@ fn log(s: &str) {
 }
 
 /// Structure for easy WebRTC handling without all the hassle of JS-internals.
-pub struct WebRTCCallerWasm {
-    nt: WebRTCCallerState,
+pub struct WebRTCConnectionWasm {
+    nt: WebRTCConnectionState,
     rp_conn: RtcPeerConnection,
     ch_msg: Receiver<String>,
     ch_dc: Receiver<RtcDataChannel>,
@@ -33,8 +33,8 @@ pub struct WebRTCCallerWasm {
     dc: Option<RtcDataChannel>,
 }
 
-impl WebRTCCallerWasm {
-    /// Returns a new WebRTCCaller in either init or follower mode.
+impl WebRTCConnectionWasm {
+    /// Returns a new WebRTCConnection in either init or follower mode.
     /// One of the nodes connecting must be an init node, the other a follower node.
     /// There is no error handling if both are init nodes or both are follower nodes.
     ///
@@ -47,15 +47,15 @@ impl WebRTCCallerWasm {
     /// Once two nodes are set up, they need to exchang the offer and the answer string.
     /// Followed by that they need to exchange the ice strings, in either order.
     /// Only after exchanging this information can the msg_send and msg_receive methods be used.
-    pub fn new(nt: WebRTCCallerState) -> Result<WebRTCCallerWasm, String> {
+    pub fn new(nt: WebRTCConnectionState) -> Result<WebRTCConnectionWasm, String> {
         let rp_conn = RtcPeerConnection::new().map_err(|e| e.as_string().unwrap())?;
         let (ch_msg_send, ch_msg) = mpsc::sync_channel::<String>(1);
         let ch_dc = match nt {
-            WebRTCCallerState::Initializer => dc_create_init(&rp_conn, &ch_msg_send)?,
-            WebRTCCallerState::Follower => dc_create_follow(&rp_conn, &ch_msg_send),
+            WebRTCConnectionState::Initializer => dc_create_init(&rp_conn, &ch_msg_send)?,
+            WebRTCConnectionState::Follower => dc_create_follow(&rp_conn, &ch_msg_send),
         };
         let ch_ice = ice_start(&rp_conn);
-        let rn = WebRTCCallerWasm {
+        let rn = WebRTCConnectionWasm {
             nt,
             rp_conn,
             ch_msg,
@@ -208,7 +208,7 @@ impl WebRTCCallerWasm {
     // Making sure the struct is in correct state
 
     fn is_initializer(&self) -> Result<(), JsValue> {
-        if self.nt != WebRTCCallerState::Initializer {
+        if self.nt != WebRTCConnectionState::Initializer {
             return Err(JsValue::from_str(
                 "This method is only available to the Initializer",
             ));
@@ -217,7 +217,7 @@ impl WebRTCCallerWasm {
     }
 
     fn is_follower(&self) -> Result<(), JsValue> {
-        if self.nt != WebRTCCallerState::Follower {
+        if self.nt != WebRTCConnectionState::Follower {
             return Err(JsValue::from_str(
                 "This method is only available to the Follower",
             ));
@@ -277,7 +277,7 @@ impl WebRTCCallerWasm {
 }
 
 #[async_trait(?Send)]
-impl WebRTCCaller for WebRTCCallerWasm {
+impl WebRTCConnection for WebRTCConnectionWasm {
     async fn call(
         &mut self,
         call: WebRTCMethod,

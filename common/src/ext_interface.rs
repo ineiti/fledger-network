@@ -13,8 +13,11 @@ pub trait Logger: Send {
     fn clone(&self) -> Box<dyn Logger>;
 }
 
+pub type WebRTCSpawner =
+    Box<dyn Fn(WebRTCConnectionState) -> Result<Box<dyn WebRTCConnection>, String>>;
+
 #[async_trait(?Send)]
-pub trait WebRTCCaller {
+pub trait WebRTCConnection {
     async fn call(
         &mut self,
         call: WebRTCMethod,
@@ -36,7 +39,7 @@ pub enum WebRTCMethod {
 
 /// What type of node this is
 #[derive(PartialEq, Debug)]
-pub enum WebRTCCallerState {
+pub enum WebRTCConnectionState {
     Initializer,
     Follower,
 }

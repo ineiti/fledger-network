@@ -1,14 +1,14 @@
-use common::ext_interface::WebRTCCallerState;
+use common::ext_interface::WebRTCConnectionState;
 
 use common::web_rtc::WebRTCClient;
 use wasm_bindgen::prelude::*;
 
-use crate::web_rtc::WebRTCCallerWasm;
+use crate::web_rtc::WebRTCConnectionWasm;
 
 pub async fn test_webrtc() -> Result<(), JsValue> {
     // Set up two PCs - one needs to have init == true, the other init == false
-    let pc1 = WebRTCCallerWasm::new(WebRTCCallerState::Initializer)?;
-    let pc2 = WebRTCCallerWasm::new(WebRTCCallerState::Follower)?;
+    let pc1 = WebRTCConnectionWasm::new(WebRTCConnectionState::Initializer)?;
+    let pc2 = WebRTCConnectionWasm::new(WebRTCConnectionState::Follower)?;
     let mut rc1 = WebRTCClient::new(Box::new(pc1));
     let mut rc2 = WebRTCClient::new(Box::new(pc2));
 

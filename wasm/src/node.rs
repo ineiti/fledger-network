@@ -1,13 +1,13 @@
-use common::ext_interface::DataStorage;
+use common::ext_interface::{DataStorage, WebRTCConnection};
 use common::ext_interface::Logger;
 
-use common::ext_interface::WebRTCCallerState;
+use common::ext_interface::WebRTCConnectionState;
 
 use common::network::Network;use common::node::Node;
 use wasm_bindgen::JsValue;
 use web_sys::window;
 
-use crate::web_rtc::WebRTCCallerWasm;use crate::web_socket::WebSocketWasm;
+use crate::web_rtc::WebRTCConnectionWasm;use crate::web_socket::WebSocketWasm;
 
 
 struct MyDataStorage {}
@@ -55,13 +55,17 @@ impl Logger for WasmLogger{
     }
 }
 
+fn webrtc_spawner(cs: WebRTCConnectionState) -> Result<Box<dyn WebRTCConnection>, String>{
+    WebRTCConnectionWasm::new(cs).map(|conn| Box::new(conn))
+}
+
 pub async fn start(log: Box<dyn Logger>, url: &str) -> Result<Node, JsValue> {
-    let rtc_caller = WebRTCCallerWasm::new(WebRTCCallerState::Initializer)?;
+    let rtc_spawner = WebRTCConnectionWasm::new(WebRTCConnectionState::Initializer)?;
     let my_storage = Box::new(MyDataStorage {});
     // let ws = WebSocketWasm::new("wss://signal.fledg.re")?;
     let ws = WebSocketWasm::new(url)?;
     let logger = WasmLogger{};
-    let network = Network::new(Box::new(ws), Box::new(rtc_caller), Box::new(logger));
+    let network = Network::new(Box::new(ws), Box::new(rtc_spawner), Box::new(logger));
     let node = Node::new(my_storage, log, network)?;
 
     Ok(node)

@@ -1,4 +1,8 @@
-use crate::{config::NodeInfo, ext_interface::WebRTCCaller, web_rtc::MessageAnnounce};
+use crate::{
+    config::NodeInfo,
+    ext_interface::{WebRTCConnection, WebRTCSpawner},
+    web_rtc::MessageAnnounce,
+};
 use crate::{
     ext_interface::Logger,
     web_rtc::{Message, WebSocketMessage},
@@ -7,8 +11,8 @@ use crate::{
 use crate::types::U256;
 use crate::websocket::WSMessage;
 use crate::websocket::WebSocketConnection;
+use std::{pin::Pin, sync::Mutex};
 use std::{collections::HashMap, sync::Arc};
-use std::sync::Mutex;
 
 pub struct Network {
     intern: Arc<Mutex<Intern>>,
@@ -19,12 +23,13 @@ pub struct Network {
 /// This race condition is very difficult to catch, so it's easier to just allow
 /// two connections per remote node.
 struct NodeConnection {
-    conn: Vec<Box<dyn WebRTCCaller>>
+    conn: Vec<Box<dyn WebRTCConnection>>,
 }
 
 struct Intern {
     ws: Box<dyn WebSocketConnection>,
-    web_rtc: HashMap<U256, NodeConnection>,
+    web_rtc: WebRTCSpawner,
+    connections: HashMap<U256, NodeConnection>,
     logger: Box<dyn Logger>,
     node_info: Option<NodeInfo>,
     pub list: Vec<NodeInfo>,
@@ -102,13 +107,14 @@ impl Intern {
 impl Network {
     pub fn new(
         ws: Box<dyn WebSocketConnection>,
-        web_rtc: Box<dyn WebRTCCaller>,
+        web_rtc: WebRTCSpawner,
         logger: Box<dyn Logger>,
     ) -> Network {
         let net = Network {
             intern: Arc::new(Mutex::new(Intern {
                 ws,
-                web_rtc: HashMap::new(),
+                web_rtc,
+                connections: HashMap::new(),
                 logger,
                 node_info: None,
                 list: vec![],

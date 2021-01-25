@@ -1,4 +1,4 @@
-use crate::ext_interface::WebRTCCaller;
+use crate::ext_interface::WebRTCConnection;
 use crate::ext_interface::WebRTCMethod;
 
 use serde::{Deserialize, Serialize};
@@ -60,11 +60,11 @@ pub struct MessageAnnounce{
 }
 
 pub struct WebRTCClient {
-    rtc: Box<dyn WebRTCCaller>
+    rtc: Box<dyn WebRTCConnection>
 }
 
 impl WebRTCClient {
-    pub fn new(rtc: Box<dyn WebRTCCaller>) -> WebRTCClient {
+    pub fn new(rtc: Box<dyn WebRTCConnection>) -> WebRTCClient {
         WebRTCClient { rtc }
     }
 
