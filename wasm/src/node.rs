@@ -49,6 +49,10 @@ impl Logger for WasmLogger{
     fn error(&self, s: &str) {
         console_warn!(" err: {}", s);
     }
+
+    fn clone(&self) -> Box<dyn Logger> {
+        Box::new(WasmLogger{})
+    }
 }
 
 pub async fn start(log: Box<dyn Logger>) -> Result<Node, JsValue> {

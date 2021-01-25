@@ -56,4 +56,8 @@ impl Logger for NodeLogger {
         self.ch.send(format!("err : {:?}", s));
         console_warn!("err : {:?}", s);
     }
+
+    fn clone(&self) -> Box<dyn Logger>{
+        Box::new(NodeLogger{ch: self.ch.clone()})
+    }
 }

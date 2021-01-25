@@ -13,12 +13,24 @@ pub type MessageCallback = Box<dyn FnMut(WSMessage)>;
 #[async_trait(?Send)]
 pub trait WebSocketConnection {
     fn set_cb_wsmessage(&mut self, cb: MessageCallback);
-    async fn send(&self, msg: String) -> Result<(), String>;
+    async fn send(&mut self, msg: String) -> Result<(), String>;
 }
 
-pub type NewConnectionCallback = Box<dyn FnMut(Box<dyn WebSocketConnection>)>;
+//
+// These definitions are only for the unix-binaries, where
+// threads are available.
+//
 
-#[async_trait(?Send)]
+pub type MessageCallbackSend = Box<dyn FnMut(WSMessage) + Send>;
+
+#[async_trait]
+pub trait WebSocketConnectionSend: Send {
+    fn set_cb_wsmessage(&mut self, cb: MessageCallbackSend);
+    async fn send(&mut self, msg: String) -> Result<(), String>;
+}
+
+pub type NewConnectionCallback = Box<dyn FnMut(Box<dyn WebSocketConnectionSend + Send>) + Send>;
+
 pub trait WebSocketServer {
     fn set_cb_connection(&mut self, cb: NewConnectionCallback);
 }
