@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum WSMessage {
     MessageString(String),
+    Error(String),
     Closed(String),
     Opened(String),
 }

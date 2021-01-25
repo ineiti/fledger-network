@@ -25,6 +25,7 @@ impl Intern {
             }
             WSMessage::Closed(_) => {}
             WSMessage::Opened(_) => {}
+            WSMessage::Error(_) => {}
         }
     }
 }

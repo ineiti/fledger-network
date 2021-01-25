@@ -61,7 +61,7 @@ impl WebSocketServer for UnixWebSocket {
 
 impl UnixWebSocket {
     fn new() -> UnixWebSocket {
-        let server = TcpListener::bind("127.0.0.1:8080").unwrap();
+        let server = TcpListener::bind("127.0.0.1:8765").unwrap();
         let uws = UnixWebSocket {
             cb: Arc::new(Mutex::new(None)),
         };
@@ -121,7 +121,7 @@ impl WebSocketConnectionSend for UnixWSConnection {
 
     async fn send(&mut self, msg: String) -> Result<(), String> {
         println!("sending: {:?}", msg);
-        self.websocket.write_message(Message::Text(msg));
+        self.websocket.write_message(Message::Text(msg)).unwrap();
         Ok(())
     }
 }

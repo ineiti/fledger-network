@@ -36,9 +36,11 @@ impl Internal {
             WSMessage::MessageString(s) => self.receive_msg(entry, s),
             WSMessage::Closed(_) => self.close_ws(),
             WSMessage::Opened(_) => self.opened_ws(),
+            WSMessage::Error(_) => self.error_ws(),
         }
     }
 
+    fn error_ws(&self) {}
     fn close_ws(&self) {}
     fn opened_ws(&self) {}
 

@@ -1,8 +1,10 @@
 use async_trait::async_trait;
+use std::{cell::RefCell, rc::Rc};
 
-
-use common::web_rtc::WebSocketMessage;use common::websocket::MessageCallback;
-use common::websocket::WebSocketConnection;use wasm_bindgen::prelude::Closure;
+use common::{web_rtc::WebSocketMessage, websocket::WSMessage};
+use common::websocket::MessageCallback;
+use common::websocket::WebSocketConnection;
+use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 
@@ -11,7 +13,7 @@ use web_sys::MessageEvent;
 use web_sys::WebSocket;
 
 pub struct WebSocketWasm {
-    cb: Option<MessageCallback>,
+    cb: Rc<RefCell<Option<MessageCallback>>>,
     ws: WebSocket,
 }
 
@@ -19,12 +21,21 @@ impl WebSocketWasm {
     pub fn new(addr: &str) -> Result<WebSocketWasm, JsValue> {
         // Connect to an echo server
         let ws = WebSocket::new(addr)?;
+        let wsw = WebSocketWasm {
+            cb: Rc::new(RefCell::new(None)),
+            ws: ws.clone(),
+        };
 
         // create callback
-        let cloned_ws = ws.clone();
+        let cb_clone = wsw.cb.clone();
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
             if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
-                console_log!("message event, received Text: {:?}", txt);
+                let s: String = txt.into();
+                console_log!("message event, received Text: {:?}", s);
+                // cb_clone.borrow_mut().and_then(|mut cb| {cb(wsm); Some(cb)});
+                if let Some(cb) = cb_clone.borrow_mut().as_deref_mut(){
+                    cb(WSMessage::MessageString(s));
+                }
             } else {
                 console_log!("message event, received Unknown: {:?}", e);
             }
@@ -34,31 +45,40 @@ impl WebSocketWasm {
         // forget the callback to keep it alive
         onmessage_callback.forget();
 
+        let cb_clone = wsw.cb.clone();
         let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
             console_log!("error event: {:?}", e);
+            if let Some(cb) = cb_clone.borrow_mut().as_deref_mut(){
+                let s: String = e.to_string().into();
+                cb(WSMessage::Error(s));
+            }
         }) as Box<dyn FnMut(ErrorEvent)>);
         ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
         onerror_callback.forget();
 
-        let cloned_ws = ws.clone();
+        let cb_clone = wsw.cb.clone();
         let onopen_callback = Closure::wrap(Box::new(move |_| {
             console_log!("socket opened");
+            if let Some(cb) = cb_clone.borrow_mut().as_deref_mut(){
+                cb(WSMessage::Opened("".to_string()));
+            }
         }) as Box<dyn FnMut(JsValue)>);
         ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
         onopen_callback.forget();
-
-        Ok(WebSocketWasm { cb: None, ws })
+        Ok(wsw)
     }
 }
 
 #[async_trait(?Send)]
 impl WebSocketConnection for WebSocketWasm {
-    async fn send(&self, msg: String) -> Result<(), String> {
-        let _ = self.ws.send_with_str(&serde_json::to_string(&msg).map_err(|e| e.to_string())?);
+    async fn send(&mut self, msg: String) -> Result<(), String> {
+        let _ = self
+            .ws
+            .send_with_str(&serde_json::to_string(&msg).map_err(|e| e.to_string())?);
         Ok(())
     }
 
     fn set_cb_wsmessage(&mut self, cb: MessageCallback) {
-        todo!()
+        self.cb.borrow_mut().replace(cb);
     }
 }
