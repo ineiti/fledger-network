@@ -1,7 +1,6 @@
 use crate::{
     config::NodeInfo,
-    ext_interface::{WebRTCConnection, WebRTCSpawner},
-    web_rtc::MessageAnnounce,
+    web_rtc::{MessageAnnounce, WebRTCConnection, WebRTCSpawner},
 };
 use crate::{
     ext_interface::Logger,
@@ -11,7 +10,7 @@ use crate::{
 use crate::types::U256;
 use crate::websocket::WSMessage;
 use crate::websocket::WebSocketConnection;
-use std::{pin::Pin, sync::Mutex};
+use std::sync::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
 pub struct Network {
@@ -22,8 +21,11 @@ pub struct Network {
 /// This is in the case both nodes try to set up a connection at the same time.
 /// This race condition is very difficult to catch, so it's easier to just allow
 /// two connections per remote node.
+/// If a second, third, or later incoming connection from the same node happens, the previous
+/// connection is considered stale and discarded.
 struct NodeConnection {
-    conn: Vec<Box<dyn WebRTCConnection>>,
+    incoming: Option<Box<dyn WebRTCConnection>>,
+    outgoing: Option<Box<dyn WebRTCConnection>>,
 }
 
 struct Intern {
@@ -71,7 +73,7 @@ impl Intern {
         }
     }
 
-    pub fn send(&mut self, msg: Message) {
+    fn send(&mut self, msg: Message) {
         self.logger
             .info(&format!("Sending {:?} over websocket", msg));
         let wsm = WebSocketMessage { msg };
@@ -98,6 +100,15 @@ impl Intern {
             .collect();
         self.logger
             .info(&format!("Reduced list is: {:?}", self.list));
+    }
+
+    pub fn get_connection(&mut self, dst: &U256) -> Result<&Box<dyn WebRTCConnection>, String> {
+        if let Some(conns) = self.connections.get_mut(dst) {
+            if let Some(conn) = &conns.outgoing {
+                return Ok(conn.clone());
+            }
+        }
+        Err("not happening".to_string())
     }
 }
 
@@ -127,7 +138,16 @@ impl Network {
     /// it will  be used to send the string over.
     /// Else the signalling server will be contacted, a webrtc connection will
     /// be created, and then the message will be sent over.
-    pub fn send(&self, _dst: U256, _msg: String) -> Result<(), String> {
+    pub fn send(&self, dst: &U256, _msg: String) -> Result<(), String> {
+        // match self.intern.lock().unwrap().get_connection(dst){
+        //     Ok(conn) => {
+        //         conn.call(crate::ext_interface::WebRTCMethod::MsgSend,
+        //         Some("something".to_string()));
+        //     },
+        //     Err(e) => {
+        //         return Err(e);
+        //     }
+        // }
         Ok(())
     }
 
@@ -139,6 +159,10 @@ impl Network {
             .unwrap()
             .ws
             .set_cb_wsmessage(Box::new(move |msg| n.lock().unwrap().msg_cb(msg)));
+    }
+
+    pub fn clear_nodes(&self) {
+        self.intern.lock().unwrap().send(Message::ClearNodes);
     }
 
     pub fn update_node_list(&self) {

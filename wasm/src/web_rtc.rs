@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-
-use common::ext_interface::WebRTCConnection;
-use common::ext_interface::WebRTCConnectionState;
-use common::ext_interface::WebRTCMethod;
+use common::web_rtc::{WebRTCConnection, WebRTCConnectionSetup, WebRTCConnectionState};
 
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -47,7 +44,7 @@ impl WebRTCConnectionWasm {
     /// Once two nodes are set up, they need to exchang the offer and the answer string.
     /// Followed by that they need to exchange the ice strings, in either order.
     /// Only after exchanging this information can the msg_send and msg_receive methods be used.
-    pub fn new(nt: WebRTCConnectionState) -> Result<WebRTCConnectionWasm, String> {
+    pub fn new(nt: WebRTCConnectionState) -> Result<Box<dyn WebRTCConnectionSetup>, String> {
         let rp_conn = RtcPeerConnection::new().map_err(|e| e.as_string().unwrap())?;
         let (ch_msg_send, ch_msg) = mpsc::sync_channel::<String>(1);
         let ch_dc = match nt {
@@ -63,107 +60,7 @@ impl WebRTCConnectionWasm {
             ch_ice,
             dc: None,
         };
-        Ok(rn)
-    }
-
-    /// Returns the offer string that needs to be sent to the `Follower` node.
-    async fn make_offer(&self) -> Result<String, JsValue> {
-        self.is_initializer()?;
-        let offer = JsFuture::from(self.rp_conn.create_offer()).await?;
-        let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))?
-            .as_string()
-            .unwrap();
-
-        let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
-        offer_obj.sdp(&offer_sdp);
-        let sld_promise = self.rp_conn.set_local_description(&offer_obj);
-        JsFuture::from(sld_promise).await?;
-        Ok(offer_sdp)
-    }
-
-    /// Takes the offer string
-    async fn make_answer(&self, offer: String) -> Result<String, JsValue> {
-        self.is_follower()?;
-        let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
-        offer_obj.sdp(&offer);
-        let srd_promise = self.rp_conn.set_remote_description(&offer_obj);
-        JsFuture::from(srd_promise).await?;
-
-        let answer = match JsFuture::from(self.rp_conn.create_answer()).await {
-            Ok(f) => f,
-            Err(e) => {
-                log(&format!("Error answer: {:?}", e));
-                return Err(e);
-            }
-        };
-        let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))?
-            .as_string()
-            .unwrap();
-
-        let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-        answer_obj.sdp(&answer_sdp);
-        let sld_promise = self.rp_conn.set_local_description(&answer_obj);
-        JsFuture::from(sld_promise).await?;
-        Ok(answer_sdp)
-    }
-
-    /// Takes the answer string and finalizes the first part of the connection.
-    async fn use_answer(&self, answer: String) -> Result<(), JsValue> {
-        self.is_initializer()?;
-        let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-        answer_obj.sdp(&answer);
-        let srd_promise = self.rp_conn.set_remote_description(&answer_obj);
-        JsFuture::from(srd_promise).await?;
-        Ok(())
-    }
-
-    /// Waits for the ICE to move on from the 'New' state
-    async fn wait_gathering(&self) -> Result<(), JsValue> {
-        self.is_not_setup()?;
-        for _ in 0u8..10 {
-            match self.rp_conn.ice_gathering_state() {
-                RtcIceGatheringState::New => wait_ms(1000).await,
-                _ => return Ok(()),
-            }
-        }
-        Err(JsValue::from_str("Didn't reach IceGatheringState"))
-    }
-
-    /// Waits for the ICE string to be avaialble.
-    async fn ice_string(&self) -> Result<String, JsValue> {
-        self.is_not_setup()?;
-        for _ in 0..10 {
-            match self.ch_ice.try_iter().next() {
-                Some(s) => {
-                    return Ok(s);
-                }
-                None => (),
-            };
-            wait_ms(1000).await;
-        }
-        Err(JsValue::from_str("Didn't get ICE in time"))
-    }
-
-    /// Sends the ICE string to the WebRTC.
-    fn ice_put(&self, ice: String) -> Result<(), JsValue> {
-        self.is_not_setup()?;
-        let rp_clone = self.rp_conn.clone();
-        let els: Vec<&str> = ice.split("::").collect();
-        if els.len() != 3 {
-            return Err(JsValue::from_str("wrong ice candidate string"));
-        }
-        let mut ric_init = RtcIceCandidateInit::new(els[0]);
-        ric_init.sdp_mid(Some(els[1]));
-        ric_init.sdp_m_line_index(Some(els[2].parse::<u16>().unwrap()));
-        match RtcIceCandidate::new(&ric_init) {
-            Ok(e) => {
-                let _ = rp_clone.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&e));
-                Ok(())
-            }
-            Err(e) => Err(JsValue::from_str(
-                format!("Couldn't consume ice: {:?}", e).as_str(),
-            )),
-        }
+        Ok(Box::new(rn))
     }
 
     /// Waits for a message to arrive. If no message arrives within 10 * 100ms,
@@ -195,41 +92,25 @@ impl WebRTCConnectionWasm {
         }
     }
 
-    fn print_states(&self) {
-        log(&format!(
-            "{:?}: rpc_conn state is: {:?} / {:?} / {:?}",
-            self.nt,
-            self.rp_conn.signaling_state(),
-            self.rp_conn.ice_gathering_state(),
-            self.rp_conn.ice_connection_state()
-        ));
-    }
-
     // Making sure the struct is in correct state
 
-    fn is_initializer(&self) -> Result<(), JsValue> {
+    fn is_initializer(&self) -> Result<(), String> {
         if self.nt != WebRTCConnectionState::Initializer {
-            return Err(JsValue::from_str(
-                "This method is only available to the Initializer",
-            ));
+            return Err("This method is only available to the Initializer".to_string());
         }
         Ok(())
     }
 
-    fn is_follower(&self) -> Result<(), JsValue> {
+    fn is_follower(&self) -> Result<(), String> {
         if self.nt != WebRTCConnectionState::Follower {
-            return Err(JsValue::from_str(
-                "This method is only available to the Follower",
-            ));
+            return Err("This method is only available to the Follower".to_string());
         }
         Ok(())
     }
 
-    fn is_not_setup(&self) -> Result<(), JsValue> {
+    fn is_not_setup(&self) -> Result<(), String> {
         if self.dc.is_some() {
-            return Err(JsValue::from_str(
-                "This method is only available before setup is complete",
-            ));
+            return Err("This method is only available before setup is complete".to_string());
         }
         Ok(())
     }
@@ -277,27 +158,130 @@ impl WebRTCConnectionWasm {
 }
 
 #[async_trait(?Send)]
-impl WebRTCConnection for WebRTCConnectionWasm {
-    async fn call(
-        &mut self,
-        call: WebRTCMethod,
-        input: Option<String>,
-    ) -> Result<Option<String>, String> {
-        match call {
-            WebRTCMethod::MakeOffer => self.make_offer().await.map(|s| Some(s)),
-            WebRTCMethod::MakeAnswer => self.make_answer(input.unwrap()).await.map(|s| Some(s)),
-            WebRTCMethod::UseAnswer => self.use_answer(input.unwrap()).await.map(|_| None),
-            WebRTCMethod::WaitGathering => self.wait_gathering().await.map(|_| None),
-            WebRTCMethod::IceString => self.ice_string().await.map(|s| Some(s)),
-            WebRTCMethod::IcePut => self.ice_put(input.unwrap()).map(|_| None),
-            WebRTCMethod::MsgReceive => self.msg_receive().await.map(|s| Some(s)),
-            WebRTCMethod::MsgSend => self.msg_send(&input.unwrap()).await.map(|_| None),
-            WebRTCMethod::PrintStates => {
-                self.print_states();
-                Ok(None)
+impl WebRTCConnectionSetup for WebRTCConnectionWasm {
+    /// Returns the offer string that needs to be sent to the `Follower` node.
+    async fn make_offer(&mut self) -> Result<String, String> {
+        self.is_initializer()?;
+        let offer = JsFuture::from(self.rp_conn.create_offer())
+            .await
+            .map_err(|e| e.as_string().unwrap())?;
+        let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
+            .map_err(|e| e.as_string().unwrap())?
+            .as_string()
+            .unwrap();
+
+        let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+        offer_obj.sdp(&offer_sdp);
+        let sld_promise = self.rp_conn.set_local_description(&offer_obj);
+        JsFuture::from(sld_promise)
+            .await
+            .map_err(|e| e.as_string().unwrap())?;
+        Ok(offer_sdp)
+    }
+
+    /// Takes the offer string
+    async fn make_answer(&mut self, offer: String) -> Result<String, String> {
+        self.is_follower()?;
+        let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+        offer_obj.sdp(&offer);
+        let srd_promise = self.rp_conn.set_remote_description(&offer_obj);
+        JsFuture::from(srd_promise)
+            .await
+            .map_err(|e| e.as_string().unwrap())?;
+
+        let answer = match JsFuture::from(self.rp_conn.create_answer()).await {
+            Ok(f) => f,
+            Err(e) => {
+                log(&format!("Error answer: {:?}", e));
+                return Err(e.as_string().unwrap());
+            }
+        };
+        let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
+            .map_err(|e| e.as_string().unwrap())?
+            .as_string()
+            .unwrap();
+
+        let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+        answer_obj.sdp(&answer_sdp);
+        let sld_promise = self.rp_conn.set_local_description(&answer_obj);
+        JsFuture::from(sld_promise)
+            .await
+            .map_err(|e| e.as_string().unwrap())?;
+        Ok(answer_sdp)
+    }
+
+    /// Takes the answer string and finalizes the first part of the connection.
+    async fn use_answer(&mut self, answer: String) -> Result<(), String> {
+        self.is_initializer()?;
+        let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+        answer_obj.sdp(&answer);
+        let srd_promise = self.rp_conn.set_remote_description(&answer_obj);
+        JsFuture::from(srd_promise)
+            .await
+            .map_err(|e| e.as_string().unwrap())?;
+        Ok(())
+    }
+
+    /// Waits for the ICE to move on from the 'New' state
+    async fn wait_gathering(&mut self) -> Result<(), String> {
+        self.is_not_setup()?;
+        for _ in 0u8..10 {
+            match self.rp_conn.ice_gathering_state() {
+                RtcIceGatheringState::New => wait_ms(1000).await,
+                _ => return Ok(()),
             }
         }
-        .map_err(|e| e.as_string().unwrap())
+        Err("Didn't reach IceGatheringState".to_string())
+    }
+
+    /// Waits for the ICE string to be avaialble.
+    async fn ice_string(&mut self) -> Result<String, String> {
+        self.is_not_setup()?;
+        for _ in 0..10 {
+            match self.ch_ice.try_iter().next() {
+                Some(s) => {
+                    return Ok(s);
+                }
+                None => (),
+            };
+            wait_ms(1000).await;
+        }
+        Err("Didn't get ICE in time".to_string())
+    }
+
+    /// Sends the ICE string to the WebRTC.
+    async fn ice_put(&mut self, ice: String) -> Result<(), String> {
+        self.is_not_setup()?;
+        let rp_clone = self.rp_conn.clone();
+        let els: Vec<&str> = ice.split("::").collect();
+        if els.len() != 3 {
+            return Err("wrong ice candidate string".to_string());
+        }
+        let mut ric_init = RtcIceCandidateInit::new(els[0]);
+        ric_init.sdp_mid(Some(els[1]));
+        ric_init.sdp_m_line_index(Some(els[2].parse::<u16>().unwrap()));
+        match RtcIceCandidate::new(&ric_init) {
+            Ok(e) => {
+                let _ = rp_clone.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&e));
+                Ok(())
+            }
+            Err(e) => Err(format!("Couldn't consume ice: {:?}", e)),
+        }
+        .map_err(|js| js.to_string())
+    }
+
+    async fn print_states(&mut self) {
+        log(&format!(
+            "{:?}: rpc_conn state is: {:?} / {:?} / {:?}",
+            self.nt,
+            self.rp_conn.signaling_state(),
+            self.rp_conn.ice_gathering_state(),
+            self.rp_conn.ice_connection_state()
+        ));
+    }
+
+    async fn get_connection(&mut self) -> Result<Box<dyn WebRTCConnection>, String> {
+        Err("Not yet implemented".to_string())
     }
 }
 

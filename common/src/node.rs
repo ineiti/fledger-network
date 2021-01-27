@@ -1,7 +1,6 @@
 use crate::config::{NodeConfig, NodeInfo};
 use crate::ext_interface::{DataStorage, Logger};
-use crate::network::Network;use crate::types::U256;
-use crate::web_rtc::Message;use crate::web_rtc::WebSocketMessage;
+use crate::network::Network;
 
 /// The node structure holds it all together. It is the main structure of the project.
 pub struct Node {
@@ -39,12 +38,8 @@ impl Node {
     }
 
     /// TODO: this is only for development
-    pub async fn clear(&self) -> Result<(), String> {
-        self.network
-            .send(U256::rnd(), serde_json::to_string(&WebSocketMessage {
-                msg: Message::ClearNodes,
-            }).unwrap())
-            .map(|_| ())
+    pub async fn clear(&self) {
+        self.network.clear_nodes();
     }
 
     pub async fn list(&mut self) {
@@ -52,11 +47,13 @@ impl Node {
     }
 
     pub async fn ping(&mut self) {
-        for node in &self.network.get_list(){
+        for node in &self.network.get_list() {
             self.logger.info(&format!("Contacting node {:?}", node));
-            match self.network.send(node.public.clone(), "ping".to_string()){
-                Ok(_) => {self.logger.info("Successfully sent ping")}
-                Err(e) => {self.logger.error(&format!("Error while sending ping: {:?}", e))}
+            match self.network.send(&node.public, "ping".to_string()) {
+                Ok(_) => self.logger.info("Successfully sent ping"),
+                Err(e) => self
+                    .logger
+                    .error(&format!("Error while sending ping: {:?}", e)),
             }
         }
     }
