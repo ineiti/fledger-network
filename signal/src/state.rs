@@ -53,11 +53,11 @@ impl ServerState {
         }
     }
 
-    pub fn send_message(&self, entry: &U256, msg: Message) {
-        let int_arc = Arc::clone(&self.int);
-        let mut int = int_arc.lock().unwrap();
-        int.send_message(entry, msg);
-    }
+    // pub fn send_message(&self, entry: &U256, msg: Message) {
+    //     let int_arc = Arc::clone(&self.int);
+    //     let mut int = int_arc.lock().unwrap();
+    //     int.send_message(entry, msg);
+    // }
 }
 
 #[cfg(test)]

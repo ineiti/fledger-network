@@ -6,8 +6,7 @@ use common::node::Node;
 use wasm_bindgen::JsValue;
 use web_sys::window;
 
-use crate::web_rtc::WebRTCConnectionWasm;
-use crate::web_socket::WebSocketWasm;
+use crate::{web_rtc_setup::WebRTCConnectionSetupWasm, web_socket::WebSocketWasm};
 
 struct MyDataStorage {}
 
@@ -55,7 +54,7 @@ impl Logger for WasmLogger {
 }
 
 pub async fn start(log: Box<dyn Logger>, url: &str) -> Result<Node, JsValue> {
-    let rtc_spawner = Box::new(|cs| WebRTCConnectionWasm::new(cs));
+    let rtc_spawner = Box::new(|cs| WebRTCConnectionSetupWasm::new(cs));
     let my_storage = Box::new(MyDataStorage {});
     // let ws = WebSocketWasm::new("wss://signal.fledg.re")?;
     let ws = WebSocketWasm::new(url)?;

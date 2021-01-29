@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{config::NodeInfo, types::U256};
 
 pub type WebRTCSpawner =
-    Box<dyn Fn(WebRTCConnectionState) -> Result<Box<dyn WebRTCConnection>, String>>;
+    Box<dyn Fn(WebRTCConnectionState) -> Result<Box<dyn WebRTCConnectionSetup>, String>>;
 
 #[async_trait(?Send)]
 pub trait WebRTCConnectionSetup {

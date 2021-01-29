@@ -1,6 +1,9 @@
 use crate::{
     config::NodeInfo,
-    web_rtc::{MessageAnnounce, WebRTCConnection, WebRTCSpawner},
+    web_rtc::{
+        MessageAnnounce, WebRTCConnection, WebRTCConnectionSetup, WebRTCConnectionState,
+        WebRTCSpawner,
+    },
 };
 use crate::{
     ext_interface::Logger,
@@ -25,7 +28,20 @@ pub struct Network {
 /// connection is considered stale and discarded.
 struct NodeConnection {
     incoming: Option<Box<dyn WebRTCConnection>>,
+    incoming_setup: Option<Box<dyn WebRTCConnectionSetup>>,
     outgoing: Option<Box<dyn WebRTCConnection>>,
+    outgoing_setup: Option<Box<dyn WebRTCConnectionSetup>>,
+}
+
+impl NodeConnection {
+    fn new() -> NodeConnection {
+        NodeConnection {
+            incoming: None,
+            incoming_setup: None,
+            outgoing: None,
+            outgoing_setup: None,
+        }
+    }
 }
 
 struct Intern {
@@ -62,7 +78,7 @@ impl Intern {
                     challenge,
                     node_info: self.node_info.clone().unwrap(),
                 };
-                self.send(Message::Announce(ma));
+                self.send_ws(Message::Announce(ma));
             }
             Message::ListIDsReply(list) => {
                 self.update_list(list);
@@ -73,7 +89,7 @@ impl Intern {
         }
     }
 
-    fn send(&mut self, msg: Message) {
+    fn send_ws(&mut self, msg: Message) {
         self.logger
             .info(&format!("Sending {:?} over websocket", msg));
         let wsm = WebSocketMessage { msg };
@@ -87,7 +103,7 @@ impl Intern {
     }
 
     pub fn update_node_list(&mut self) {
-        self.send(Message::ListIDsRequest);
+        self.send_ws(Message::ListIDsRequest);
     }
 
     pub fn update_list(&mut self, list: Vec<NodeInfo>) {
@@ -102,12 +118,15 @@ impl Intern {
             .info(&format!("Reduced list is: {:?}", self.list));
     }
 
-    pub fn get_connection(&mut self, dst: &U256) -> Result<&Box<dyn WebRTCConnection>, String> {
+    pub fn get_connection(&mut self, dst: &U256) -> Result<Box<dyn WebRTCConnection>, String> {
         if let Some(conns) = self.connections.get_mut(dst) {
             if let Some(conn) = &conns.outgoing {
                 return Ok(conn.clone());
             }
+        } else {
+            self.connections.insert(dst.clone(), NodeConnection::new());
         }
+        // (self.web_rtc)(WebRTCConnectionState::Initializer)?);
         Err("not happening".to_string())
     }
 }
@@ -138,16 +157,19 @@ impl Network {
     /// it will  be used to send the string over.
     /// Else the signalling server will be contacted, a webrtc connection will
     /// be created, and then the message will be sent over.
-    pub fn send(&self, dst: &U256, _msg: String) -> Result<(), String> {
-        // match self.intern.lock().unwrap().get_connection(dst){
-        //     Ok(conn) => {
-        //         conn.call(crate::ext_interface::WebRTCMethod::MsgSend,
-        //         Some("something".to_string()));
-        //     },
-        //     Err(e) => {
-        //         return Err(e);
-        //     }
-        // }
+    pub fn send(&self, dst: &U256, msg: String) -> Result<(), String> {
+        let mut int = self.intern.lock().unwrap();
+        match int.get_connection(dst) {
+            Ok(conn) => match conn.send(msg) {
+                Ok(()) => {}
+                Err(e) => int
+                    .logger
+                    .info(&format!("Error while sending: {:?}", e.to_string())),
+            },
+            Err(e) => {
+                return Err(e);
+            }
+        }
         Ok(())
     }
 
@@ -162,7 +184,7 @@ impl Network {
     }
 
     pub fn clear_nodes(&self) {
-        self.intern.lock().unwrap().send(Message::ClearNodes);
+        self.intern.lock().unwrap().send_ws(Message::ClearNodes);
     }
 
     pub fn update_node_list(&self) {
