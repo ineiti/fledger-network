@@ -1,12 +1,11 @@
 use std::sync::Mutex;
-use std::{collections::HashMap, sync::Arc};
-
+use std::{collections::{hash_map::Entry, HashMap}, sync::Arc};
 use common::config::NodeInfo;
 use common::ext_interface::Logger;
 
 use common::types::U256;
 
-use common::web_rtc::Message;
+use common::web_rtc::WSSignalMessage;
 
 use common::web_rtc::WebSocketMessage;
 use common::websocket::WSMessage;
@@ -58,12 +57,12 @@ impl Internal {
 
         match msg_ws.msg {
             // Node sends his information to the server
-            Message::Announce(msg_ann) => {
+            WSSignalMessage::Announce(msg_ann) => {
                 self.logger
                     .info(&format!("Storing node {:?}", msg_ann.node_info));
                 let public = msg_ann.node_info.public.clone();
                 self.nodes.retain(|_, ni| {
-                    if let Some(info) = ni.info.clone(){
+                    if let Some(info) = ni.info.clone() {
                         return info.public != public;
                     }
                     return true;
@@ -76,14 +75,14 @@ impl Internal {
 
             // Node requests deleting of the list of all nodes
             // TODO: remove this after debugging is done
-            Message::ClearNodes => {
+            WSSignalMessage::ClearNodes => {
                 self.logger.info("Clearing nodes");
                 self.nodes.clear();
             }
 
             // Node requests a list of all currently connected nodes,
             // including itself.
-            Message::ListIDsRequest => {
+            WSSignalMessage::ListIDsRequest => {
                 self.logger.info("Sending list IDs");
                 let ids: Vec<NodeInfo> = self
                     .nodes
@@ -91,38 +90,41 @@ impl Internal {
                     .filter(|ne| ne.1.info.is_some())
                     .map(|ne| ne.1.info.clone().unwrap())
                     .collect();
-                self.send_message(entry, Message::ListIDsReply(ids));
+                    self.send_message_errlog(entry, WSSignalMessage::ListIDsReply(ids));
             }
 
             // Node sends a PeerRequest with some of the data set to 'Some'.
-            Message::PeerRequest(pr) => {
-                self.logger.info(&format!("Got a PeerRequest {:?}", pr));
-                self.nodes.entry(entry.clone()).and_modify(|ne| {
-                    ne.peers.insert(pr.node.clone(), pr.clone());
-                });
-                let node_info = self.nodes.get(&entry.clone()).unwrap();
-                let mut msg: Option<Message> = None;
-                if let Some(other) = self.nodes.get(&pr.node) {
-                    if let Some(other_pr) = other
-                        .peers
-                        .get(&node_info.info.clone().unwrap().public.clone())
-                    {
-                        msg = Some(Message::PeerReply(other_pr.clone()));
-                    }
-                }
-                if msg.is_some() {
-                    self.send_message(entry, msg.unwrap());
-                }
+            WSSignalMessage::PeerSetup(pr) => {
+                self.logger.info(&format!("Got a PeerSetup {:?}", pr));
+                let dst = if *entry == pr.id_init {
+                    &pr.id_follow
+                } else {
+                    &pr.id_init
+                };
+                self.send_message_errlog(dst, WSSignalMessage::PeerSetup(pr.clone()));
             }
             _ => {}
         }
     }
 
-    /// TODO: should the error be caught somewhere?
-    pub fn send_message(&mut self, entry: &U256, msg: Message) {
+    fn send_message_errlog(&mut self, entry: &U256, msg: WSSignalMessage){
+        if let Err(e) = self.send_message(entry, msg){
+            self.logger.error(&format!("Couldn't send ListIDsReply: {}", e));
+        }
+    }
+
+    /// Tries to send a message to the indicated node.
+    /// If the node is not reachable, an error will be returned.
+    pub fn send_message(&mut self, entry: &U256, msg: WSSignalMessage) -> Result<(), String> {
         let msg_str = serde_json::to_string(&WebSocketMessage { msg }).unwrap();
-        self.nodes
-            .entry(entry.clone())
-            .and_modify(|ent| executor::block_on((ent.conn).send(msg_str)).unwrap());
+        match self.nodes.entry(entry.clone()){
+            Entry::Occupied(mut e) => {
+                executor::block_on((e.get_mut().conn).send(msg_str)).unwrap();
+                Ok(())
+            }
+            Entry::Vacant(_) => {
+                Err("Destination not reachable".to_string())
+            }
+        }
     }
 }

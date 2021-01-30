@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{config::NodeInfo, types::U256};
 
+pub mod setup;
+
 pub type WebRTCSpawner =
     Box<dyn Fn(WebRTCConnectionState) -> Result<Box<dyn WebRTCConnectionSetup>, String>>;
 
@@ -46,23 +48,52 @@ pub trait WebRTCConnection {
 pub type WebRTCMessageCB = Box<dyn FnMut(String)>;
 
 /// What type of node this is
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum WebRTCConnectionState {
     Initializer,
     Follower,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub enum PeerMessage {
+    Init,
+    Offer(String),
+    Answer(String),
+    IceInit(String),
+    IceFollow(String),
+    Done,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PeerInfo {
-    pub node: U256,
-    pub offer: Option<String>,
-    pub candidate: Option<String>,
-    pub answer: Option<String>,
+    pub id_init: U256,
+    pub id_follow: U256,
+    pub message: PeerMessage,
+}
+
+impl PeerInfo {
+    pub fn new(init: &U256, follow: &U256) -> PeerInfo {
+        PeerInfo {
+            id_init: init.clone(),
+            id_follow: follow.clone(),
+            message: PeerMessage::Init,
+        }
+    }
+
+    pub fn get_remote(&self, local: &U256) -> Option<U256> {
+        if self.id_init == local.clone() {
+            return Some(self.id_follow.clone());
+        }
+        if self.id_follow == local.clone() {
+            return Some(self.id_init.clone());
+        }
+        return None;
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WebSocketMessage {
-    pub msg: Message,
+    pub msg: WSSignalMessage,
 }
 
 impl WebSocketMessage {
@@ -89,14 +120,13 @@ impl WebSocketMessage {
 /// TODO: use the "Challenge" to sign with the private key of the node, so that the server
 /// can verify that the node knows the corresponding private key of its public key.
 #[derive(Debug, Deserialize, Serialize)]
-pub enum Message {
+pub enum WSSignalMessage {
     Challenge(U256),
     Announce(MessageAnnounce),
     ListIDsRequest,
     ListIDsReply(Vec<NodeInfo>),
     ClearNodes,
-    PeerRequest(PeerInfo),
-    PeerReply(PeerInfo),
+    PeerSetup(PeerInfo),
     Done,
 }
 

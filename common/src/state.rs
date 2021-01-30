@@ -10,17 +10,17 @@ pub struct Logs {
 
 pub struct LogConnectivity {
     // time: u32,
-    // connectivities: Vec<Connectivity>,
+// connectivities: Vec<Connectivity>,
 }
 
 pub struct Connectivity {
     // source: NodeInfo,
-    // connections: Vec<Connection>,
+// connections: Vec<Connection>,
 }
 
 /// Represents one connection from a node to another.
 pub struct Connection {
     // with: NodeInfo,
-    // ping-time in miliseconds. If not reachable, -1.
-    // ping: i32,
+// ping-time in miliseconds. If not reachable, -1.
+// ping: i32,
 }

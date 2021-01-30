@@ -49,7 +49,7 @@ impl Node {
     pub async fn ping(&mut self) {
         for node in &self.network.get_list() {
             self.logger.info(&format!("Contacting node {:?}", node));
-            match self.network.send(&node.public, "ping".to_string()) {
+            match self.network.send(&node.public, "ping".to_string()).await {
                 Ok(_) => self.logger.info("Successfully sent ping"),
                 Err(e) => self
                     .logger

@@ -4,7 +4,6 @@ use std::thread;
 
 use common::{ext_interface::Logger, websocket::WebSocketConnectionSend};
 use common::types::U256;
-use common::web_rtc::Message;
 use common::websocket::WebSocketServer;
 
 mod internal;
