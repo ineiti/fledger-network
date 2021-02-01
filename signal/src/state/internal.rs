@@ -108,8 +108,8 @@ impl Internal {
     }
 
     fn send_message_errlog(&mut self, entry: &U256, msg: WSSignalMessage){
-        if let Err(e) = self.send_message(entry, msg){
-            self.logger.error(&format!("Couldn't send ListIDsReply: {}", e));
+        if let Err(e) = self.send_message(entry, msg.clone()){
+            self.logger.error(&format!("Error {} while sending {:?}", e, msg));
         }
     }
 
@@ -123,6 +123,7 @@ impl Internal {
                 Ok(())
             }
             Entry::Vacant(_) => {
+                self.logger.info(&format!("node {} not found", entry));
                 Err("Destination not reachable".to_string())
             }
         }

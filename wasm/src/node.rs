@@ -1,7 +1,6 @@
 use common::ext_interface::DataStorage;
 use common::ext_interface::Logger;
 
-use common::network::Network;
 use common::node::Node;
 use wasm_bindgen::JsValue;
 use web_sys::window;
@@ -58,9 +57,7 @@ pub async fn start(log: Box<dyn Logger>, url: &str) -> Result<Node, JsValue> {
     let my_storage = Box::new(MyDataStorage {});
     // let ws = WebSocketWasm::new("wss://signal.fledg.re")?;
     let ws = WebSocketWasm::new(url)?;
-    let logger = WasmLogger {};
-    let network = Network::new(Box::new(ws), rtc_spawner, Box::new(logger));
-    let node = Node::new(my_storage, log, network)?;
+    let node = Node::new(my_storage, log, Box::new(ws), rtc_spawner)?;
 
     Ok(node)
 }

@@ -119,7 +119,7 @@ impl WebSocketMessage {
 ///
 /// TODO: use the "Challenge" to sign with the private key of the node, so that the server
 /// can verify that the node knows the corresponding private key of its public key.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum WSSignalMessage {
     Challenge(U256),
     Announce(MessageAnnounce),
@@ -131,7 +131,7 @@ pub enum WSSignalMessage {
 }
 
 /// TODO: add a signature on the challenge
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MessageAnnounce {
     pub challenge: U256,
     pub node_info: NodeInfo,
