@@ -1,7 +1,11 @@
-use std::sync::Mutex;
-use std::{collections::{hash_map::Entry, HashMap}, sync::Arc};
+use bimap::BiMap;
 use common::config::NodeInfo;
 use common::ext_interface::Logger;
+use std::sync::Mutex;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
 use common::types::U256;
 
@@ -16,6 +20,7 @@ use super::node_entry::NodeEntry;
 pub struct Internal {
     pub logger: Box<dyn Logger>,
     pub nodes: HashMap<U256, NodeEntry>,
+    pub_chal: BiMap<U256, U256>,
 }
 
 impl Internal {
@@ -23,16 +28,23 @@ impl Internal {
         let int = Arc::new(Mutex::new(Internal {
             logger,
             nodes: HashMap::new(),
+            pub_chal: BiMap::new(),
         }));
         int
     }
 
     /// Treats incoming messages from nodes.
-    pub fn cb_msg(&mut self, entry: &U256, msg: WSMessage) {
-        self.logger
-            .info(&format!("Got new message from {:?}: {:?}", entry, msg));
+    pub fn cb_msg(&mut self, chal: &U256, msg: WSMessage) {
+        let src = match self.chal_to_pub(chal) {
+            Some(public) => public,
+            None => chal.clone(),
+        };
+        self.logger.info(&format!(
+            "Got new message from {:?} -> {:?}: {:?}",
+            chal, src, msg
+        ));
         match msg {
-            WSMessage::MessageString(s) => self.receive_msg(entry, s),
+            WSMessage::MessageString(s) => self.receive_msg(&src, s),
             WSMessage::Closed(_) => self.close_ws(),
             WSMessage::Opened(_) => self.opened_ws(),
             WSMessage::Error(_) => self.error_ws(),
@@ -43,7 +55,21 @@ impl Internal {
     fn close_ws(&self) {}
     fn opened_ws(&self) {}
 
-    fn receive_msg(&mut self, entry: &U256, msg: String) {
+    fn pub_to_chal(&self, public: &U256) -> Option<U256> {
+        match self.pub_chal.get_by_left(public) {
+            Some(p) => Some(p.clone()),
+            None => None,
+        }
+    }
+
+    fn chal_to_pub(&self, chal: &U256) -> Option<U256> {
+        match self.pub_chal.get_by_right(chal) {
+            Some(p) => Some(p.clone()),
+            None => None,
+        }
+    }
+
+    fn receive_msg(&mut self, src: &U256, msg: String) {
         let msg_ws = match WebSocketMessage::from_str(&msg) {
             Ok(mw) => mw,
             Err(e) => {
@@ -67,8 +93,12 @@ impl Internal {
                     }
                     return true;
                 });
+                self.pub_chal
+                    .insert(msg_ann.node_info.public.clone(), src.clone());
+                self.logger
+                    .info(&format!("Converter list is {:?}", self.pub_chal));
                 self.nodes
-                    .entry(entry.clone())
+                    .entry(src.clone())
                     .and_modify(|ne| ne.info = Some(msg_ann.node_info));
                 self.logger.info(&format!("Final list is {:?}", self.nodes));
             }
@@ -90,42 +120,52 @@ impl Internal {
                     .filter(|ne| ne.1.info.is_some())
                     .map(|ne| ne.1.info.clone().unwrap())
                     .collect();
-                    self.send_message_errlog(entry, WSSignalMessage::ListIDsReply(ids));
+                self.send_message_errlog(src, WSSignalMessage::ListIDsReply(ids));
             }
 
             // Node sends a PeerRequest with some of the data set to 'Some'.
             WSSignalMessage::PeerSetup(pr) => {
                 self.logger.info(&format!("Got a PeerSetup {:?}", pr));
-                let dst = if *entry == pr.id_init {
+                let dst = if *src == pr.id_init {
                     &pr.id_follow
-                } else {
+                } else if *src == pr.id_follow {
                     &pr.id_init
+                } else {
+                    self.logger
+                        .error("Node sent a PeerSetup without including itself");
+                    return;
                 };
-                self.send_message_errlog(dst, WSSignalMessage::PeerSetup(pr.clone()));
+                self.send_message_errlog(&dst, WSSignalMessage::PeerSetup(pr.clone()));
             }
             _ => {}
         }
     }
 
-    fn send_message_errlog(&mut self, entry: &U256, msg: WSSignalMessage){
-        if let Err(e) = self.send_message(entry, msg.clone()){
-            self.logger.error(&format!("Error {} while sending {:?}", e, msg));
+    fn send_message_errlog(&mut self, public: &U256, msg: WSSignalMessage) {
+        self.logger
+            .info(&format!("Sending to {}: {:?}", public, msg));
+        if let Err(e) = self.send_message(public, msg.clone()) {
+            self.logger
+                .error(&format!("Error {} while sending {:?}", e, msg));
         }
     }
 
     /// Tries to send a message to the indicated node.
     /// If the node is not reachable, an error will be returned.
-    pub fn send_message(&mut self, entry: &U256, msg: WSSignalMessage) -> Result<(), String> {
+    pub fn send_message(&mut self, public: &U256, msg: WSSignalMessage) -> Result<(), String> {
         let msg_str = serde_json::to_string(&WebSocketMessage { msg }).unwrap();
-        match self.nodes.entry(entry.clone()){
-            Entry::Occupied(mut e) => {
-                executor::block_on((e.get_mut().conn).send(msg_str)).unwrap();
-                Ok(())
+        if let Some(chal) = self.pub_to_chal(public) {
+            match self.nodes.entry(chal.clone()) {
+                Entry::Occupied(mut e) => {
+                    self.logger.info("Internal::send_message executor");
+                    executor::block_on((e.get_mut().conn).send(msg_str)).unwrap();
+                    self.logger.info("Internal::send_message executor done");
+                    Ok(())
+                }
+                Entry::Vacant(_) => Err("Destination not reachable".to_string()),
             }
-            Entry::Vacant(_) => {
-                self.logger.info(&format!("node {} not found", entry));
-                Err("Destination not reachable".to_string())
-            }
+        } else {
+            Err("Don't know this challenge".to_string())
         }
     }
 }

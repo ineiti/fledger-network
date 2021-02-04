@@ -1,4 +1,5 @@
-use crate::{ext_interface::{DataStorage, Logger}, network::WebRTCReceive};
+
+use crate::types::U256;use crate::{ext_interface::{DataStorage, Logger}, network::WebRTCReceive};
 use crate::network::Network;
 use crate::{
     config::{NodeConfig, NodeInfo},
@@ -80,5 +81,9 @@ impl Node {
                     .error(&format!("Error while sending ping: {:?}", e)),
             }
         }
+    }
+
+    pub async fn send(&self, dst: &U256, msg: String) -> Result<(), String>{
+        self.network.send(dst, msg).await
     }
 }

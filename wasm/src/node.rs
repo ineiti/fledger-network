@@ -7,7 +7,7 @@ use web_sys::window;
 
 use crate::{web_rtc_setup::WebRTCConnectionSetupWasm, web_socket::WebSocketWasm};
 
-struct MyDataStorage {}
+pub struct MyDataStorage {}
 
 impl DataStorage for MyDataStorage {
     fn load(&self, key: &str) -> Result<String, String> {
@@ -32,7 +32,7 @@ impl DataStorage for MyDataStorage {
     }
 }
 
-struct WasmLogger {}
+pub struct WasmLogger {}
 
 impl Logger for WasmLogger {
     fn info(&self, s: &str) {

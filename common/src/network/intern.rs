@@ -36,6 +36,7 @@ impl Intern {
         logger: Box<dyn Logger>,
         node_info: NodeInfo,
     ) -> Arc<Mutex<Intern>> {
+        let log = logger.clone();
         let int = Arc::new(Mutex::new(Intern {
             ws,
             web_rtc: Arc::new(Mutex::new(web_rtc)),
@@ -49,7 +50,11 @@ impl Intern {
         int.lock()
             .unwrap()
             .ws
-            .set_cb_wsmessage(Box::new(move |msg| int_cl.lock().unwrap().msg_cb(msg)));
+            .set_cb_wsmessage(Box::new(move |msg| {
+                log.info("Intern::new lock");
+                int_cl.lock().unwrap().msg_cb(msg);
+                log.info("Intern::new unlock");
+            }));
         int
     }
 
@@ -59,10 +64,12 @@ impl Intern {
                 self.logger.info(&format!("Got a MessageString: {:?}", s));
                 match WebSocketMessage::from_str(&s) {
                     Ok(wsm) => {
+                        self.logger.info("Intern::msg_cb executing process_msg");
                         if let Err(err) = executor::block_on(self.process_msg(wsm.msg)) {
                             self.logger
                                 .error(&format!("Couldn't process message: {}", err))
                         }
+                        self.logger.info("Intern::msg_cb executing process_msg done");
                     }
                     Err(err) => self
                         .logger
@@ -97,16 +104,27 @@ impl Intern {
                         return Err("Got alien PeerSetup".to_string());
                     }
                 };
+                self.logger.info(&format!(
+                    "Got PeerSetup with init/follow {}/{}",
+                    pi.id_init, pi.id_follow
+                ));
                 let remote_clone = remote.clone();
                 let rcv = Arc::clone(&self.web_rtc_rcv);
+                let log =  self.logger.clone();
                 let conn = self
                     .connections
                     .entry(remote.clone())
                     .or_insert(NodeConnection::new(
                         Arc::clone(&self.web_rtc),
-                        Box::new(move |msg| (rcv.lock().unwrap())(remote_clone.clone(), msg)),
+                        Box::new(move |msg| {
+                            log.info("Intern::process_msg::PeerSetup lock");
+                            (rcv.lock().unwrap())(remote_clone.clone(), msg);
+                            log.info("Intern::process_msg::PeerSetup unlock");
+                        }),
+                        self.logger.clone(),
                     ));
 
+                self.logger.info("Process peer setup");
                 if let Some(message) = conn
                     .process_peer_setup(pi.message, remote == pi.id_init)
                     .await?
@@ -159,12 +177,18 @@ impl Intern {
         self.logger.info(&format!("Sending to {}: {}", dst, msg));
         let dst_clone = dst.clone();
         let rcv = Arc::clone(&self.web_rtc_rcv);
+        let log = self.logger.clone();
         let conn = self
             .connections
             .entry(dst.clone())
             .or_insert(NodeConnection::new(
                 Arc::clone(&self.web_rtc),
-                Box::new(move |msg| (rcv.lock().unwrap())(dst_clone.clone(), msg)),
+                Box::new(move |msg| {
+                    log.info("Intern::send lock");
+                    (rcv.lock().unwrap())(dst_clone.clone(), msg);
+                    log.info("Intern::send unlock");
+                }),
+                self.logger.clone(),
             ));
 
         let mut message: Option<PeerMessage> = None;

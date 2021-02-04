@@ -1,3 +1,4 @@
+use crate::ext_interface::Logger;
 use crate::web_rtc::{
     setup::ProcessResult, PeerMessage, WebRTCConnection, WebRTCConnectionState, WebRTCMessageCB,
 };
@@ -25,6 +26,7 @@ pub struct NodeConnection {
 
     web_rtc: Arc<Mutex<WebRTCSpawner>>,
     cb_msg: Arc<Mutex<WebRTCMessageCB>>,
+    logger: Box<dyn Logger>,
 }
 
 pub enum ConnectionType<'a> {
@@ -33,7 +35,11 @@ pub enum ConnectionType<'a> {
 }
 
 impl NodeConnection {
-    pub fn new(web_rtc: Arc<Mutex<WebRTCSpawner>>, cb_msg: WebRTCMessageCB) -> NodeConnection {
+    pub fn new(
+        web_rtc: Arc<Mutex<WebRTCSpawner>>,
+        cb_msg: WebRTCMessageCB,
+        logger: Box<dyn Logger>,
+    ) -> NodeConnection {
         NodeConnection {
             incoming: None,
             incoming_setup: None,
@@ -42,6 +48,7 @@ impl NodeConnection {
             outgoing_queue: vec![],
             web_rtc,
             cb_msg: Arc::new(Mutex::new(cb_msg)),
+            logger,
         }
     }
 
@@ -71,8 +78,13 @@ impl NodeConnection {
     }
 
     pub fn get_setup(&self, state: WebRTCConnectionState) -> Result<WebRTCSetup, String> {
-        let conn = (self.web_rtc.lock().unwrap())(state)?;
-        Ok(WebRTCSetup::new(Arc::new(Mutex::new(conn)), state))
+        self.logger.info("locking web_rtc");
+        let res = {
+            let conn = (self.web_rtc.lock().unwrap())(state)?;
+            Ok(WebRTCSetup::new(Arc::new(Mutex::new(conn)), state))
+        };
+        self.logger.info("unlocking web_rtc");
+        res
     }
 
     pub async fn process_peer_setup(
@@ -100,7 +112,12 @@ impl NodeConnection {
                 ProcessResult::Connection(new_conn) => {
                     self.incoming_setup = None;
                     let cb = Arc::clone(&self.cb_msg);
-                    new_conn.set_cb_message(Box::new(move |msg| (cb.lock().unwrap())(msg)));
+                    let log = self.logger.clone();
+                    new_conn.set_cb_message(Box::new(move |msg| {
+                        log.info("NoCo::ppsi lock");
+                        (cb.lock().unwrap())(msg);
+                        log.info("NoCo::ppsi unlock");
+                    }));
                     self.incoming = Some(new_conn);
                     return Ok(None);
                 }
@@ -111,6 +128,7 @@ impl NodeConnection {
                     match web.process(pi_message).await? {
                         ProcessResult::Message(message) => {
                             self.outgoing_setup = Some(web);
+                            self.logger.info("returning message");
                             return Ok(Some(message));
                         }
                         _ => return Err("couldn't start webrtc handshake".to_string()),
@@ -136,7 +154,12 @@ impl NodeConnection {
                 ProcessResult::Connection(new_conn) => {
                     self.outgoing_setup = None;
                     let cb = Arc::clone(&self.cb_msg);
-                    new_conn.set_cb_message(Box::new(move |msg| (cb.lock().unwrap())(msg)));
+                    let log = self.logger.clone();
+                    new_conn.set_cb_message(Box::new(move |msg| {
+                        log.info("NoCo::ppso lock");
+                        (cb.lock().unwrap())(msg);
+                        log.info("NoCo::ppso lock");
+                    }));
                     self.outgoing = Some(new_conn);
                     return Ok(Some(PeerMessage::Done));
                 }

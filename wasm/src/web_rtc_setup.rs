@@ -203,12 +203,15 @@ impl WebRTCConnectionSetup for WebRTCConnectionSetupWasm {
     async fn ice_string(&mut self) -> Result<String, String> {
         self.is_not_setup()?;
         for _ in 0..10 {
+            log("Trying to get ice");
             match self.ch_ice.try_iter().next() {
                 Some(s) => {
+                    log("Got ice");
                     return Ok(s);
                 }
                 None => (),
             };
+            log("Sleeping before getting ice again");
             wait_ms(1000).await;
         }
         Err("Didn't get ICE in time".to_string())
@@ -264,6 +267,7 @@ fn ice_start(rp_conn: &RtcPeerConnection) -> Receiver<String> {
                     candidate.sdp_mid().unwrap(),
                     candidate.sdp_m_line_index().unwrap()
                 );
+                log("Trying to send");
                 match s1.try_send(cand) {
                     Ok(_) => (),
                     Err(e) => log(&format!("Couldn't transmit ICE string: {:?}", e)),
@@ -281,7 +285,9 @@ fn ice_start(rp_conn: &RtcPeerConnection) -> Receiver<String> {
 fn dc_create_init(rp_conn: &RtcPeerConnection) -> Result<Receiver<RtcDataChannel>, String> {
     let dc = rp_conn.create_data_channel("data-channel");
     let (dc_send, dc_rcv) = mpsc::sync_channel::<RtcDataChannel>(1);
+    log("Sending dc over channel");
     dc_send.send(dc).map_err(|err| err.to_string())?;
+    log("Sent dc over channel");
     Ok(dc_rcv)
 }
 

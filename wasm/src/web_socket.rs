@@ -19,7 +19,7 @@ pub struct WebSocketWasm {
 
 impl WebSocketWasm {
     pub fn new(addr: &str) -> Result<WebSocketWasm, JsValue> {
-        // Connect to an echo server
+        console_log!("connecting to: {}", addr);
         let ws = WebSocket::new(addr)?;
         let wsw = WebSocketWasm {
             cb: Rc::new(RefCell::new(None)),
@@ -27,8 +27,10 @@ impl WebSocketWasm {
         };
 
         // create callback
+        console_log!("creating onmessage callback");
         let cb_clone = wsw.cb.clone();
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
+            console_log!("Getting message");
             if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
                 let s: String = txt.into();
                 console_log!("message event, received Text: {:?}", s);
@@ -45,6 +47,7 @@ impl WebSocketWasm {
         // forget the callback to keep it alive
         onmessage_callback.forget();
 
+        console_log!("creating onerror callback");
         let cb_clone = wsw.cb.clone();
         let onerror_callback = Closure::wrap(Box::new(move |e: ErrorEvent| {
             console_log!("error event: {:?}", e);
@@ -56,6 +59,7 @@ impl WebSocketWasm {
         ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
         onerror_callback.forget();
 
+        console_log!("creating onopen callback");
         let cb_clone = wsw.cb.clone();
         let onopen_callback = Closure::wrap(Box::new(move |_| {
             console_log!("socket opened");
@@ -65,6 +69,8 @@ impl WebSocketWasm {
         }) as Box<dyn FnMut(JsValue)>);
         ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
         onopen_callback.forget();
+
+        console_log!("websocket done");
         Ok(wsw)
     }
 }

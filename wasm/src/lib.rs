@@ -19,6 +19,8 @@ mod web_rtc_setup;
 mod web_rtc_connection;
 mod web_socket;
 
+mod test_webrtc;
+
 // use rest::demo;
 // use web_rtc::demo;
 use node::start;
@@ -51,6 +53,9 @@ impl Component for Model {
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
+        console_log!("setting panic hook");
+        console_error_panic_hook::set_once();
+
         let (logger, node_logger) = LoggerOutput::new();
         wasm_bindgen_futures::spawn_local(wrap(
             start(Box::new(node_logger), URL),
@@ -93,8 +98,9 @@ impl Component for Model {
     }
 
     fn view(&self) -> Html {
+        console_log!("Locking string");
         let str = self.log_str.lock().unwrap();
-        html! {
+        let h = html! {
             <div class="main">
                 <div class="ui">
                     <div>
@@ -105,7 +111,9 @@ impl Component for Model {
                     </div>
                 </div>
             </div>
-        }
+        };
+        console_log!("Unlocking string");
+        h
     }
 }
 
@@ -130,8 +138,10 @@ impl Model {
     fn node_list(&self) {
         if let Some(n) = self.node_copy() {
             wasm_bindgen_futures::spawn_local(async move {
+                console_log!("node_list locking");
                 let mut node = n.lock().unwrap();
                 node.list().await;
+                console_log!("node_list locking");
             });
         }
     }
@@ -139,8 +149,10 @@ impl Model {
     fn node_ping(&self) {
         if let Some(n) = self.node_copy() {
             wasm_bindgen_futures::spawn_local(async move {
+                console_log!("node locking");
                 let mut node = n.lock().unwrap();
                 node.ping().await;
+                console_log!("node unlocking");
             });
         }
     }

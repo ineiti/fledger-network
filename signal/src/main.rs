@@ -12,9 +12,11 @@ use std::{
     sync::{Arc, Mutex},
     thread,
 };
-use tungstenite::{accept, protocol::Role, WebSocket, Message};
+use tungstenite::{accept, protocol::Role, Message, WebSocket};
 
-use common::websocket::{WSMessage, NewConnectionCallback, WebSocketConnectionSend, WebSocketServer};
+use common::websocket::{
+    NewConnectionCallback, WSMessage, WebSocketConnectionSend, WebSocketServer,
+};
 use common::{ext_interface::Logger, websocket::MessageCallbackSend};
 use state::ServerState;
 
@@ -95,12 +97,19 @@ impl UnixWSConnection {
         let ts_clone = uwsc.websocket.get_mut().try_clone().unwrap();
         let mut ws_clone = WebSocket::from_raw_socket(ts_clone, Role::Server, None);
         thread::spawn(move || loop {
-            let msg = ws_clone.read_message().unwrap();
-            println!("Got a raw message: {:?}", msg);
-            if msg.is_text() {
-                let mut cb_mutex = cb_clone.lock().unwrap();
-                if let Some(cb) = cb_mutex.as_mut() {
-                    cb(WSMessage::MessageString(msg.to_text().unwrap().to_string()));
+            match ws_clone.read_message() {
+                Ok(msg) => {
+                    println!("Got a raw message: {:?}", msg);
+                    if msg.is_text() {
+                        let mut cb_mutex = cb_clone.lock().unwrap();
+                        if let Some(cb) = cb_mutex.as_mut() {
+                            cb(WSMessage::MessageString(msg.to_text().unwrap().to_string()));
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Closing connection: {:?}", e);
+                    return;
                 }
             }
         });
