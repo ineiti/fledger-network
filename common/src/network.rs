@@ -42,31 +42,31 @@ impl Network {
     /// So in the case of a new connection, the 'send' method returns even before the
     /// message is actually sent
     pub async fn send(&self, dst: &U256, msg: String) -> Result<(), String> {
-        self.logger.info("Network::send lock");
+        // self.logger.info("Network::send lock");
         let mut int = self.intern.lock().unwrap();
-        self.logger.info("Network::send unlock");
+        // self.logger.info("Network::send unlock");
         int.send(dst, msg).await
     }
 
     pub fn clear_nodes(&self) {
-        self.logger.info("Network::clear_nodes lock");
+        // self.logger.info("Network::clear_nodes lock");
         self.intern
             .lock()
             .unwrap()
             .send_ws(WSSignalMessage::ClearNodes);
-        self.logger.info("Network::clear_nodes unlock");
+        // self.logger.info("Network::clear_nodes unlock");
     }
 
     pub fn update_node_list(&self) {
-        self.logger.info("Network::update_node_list lock");
+        // self.logger.info("Network::update_node_list lock");
         Arc::clone(&self.intern).lock().unwrap().update_node_list();
-        self.logger.info("Network::update_node_list unlock");
+        // self.logger.info("Network::update_node_list unlock");
     }
 
     pub fn get_list(&self) -> Vec<NodeInfo> {
-        self.logger.info("Network::get_list lock");
+        // self.logger.info("Network::get_list lock");
         let ni = Arc::clone(&self.intern).lock().unwrap().list.clone();
-        self.logger.info("Network::get_list unlock");
+        // self.logger.info("Network::get_list unlock");
         ni
     }
 }

@@ -267,7 +267,7 @@ fn ice_start(rp_conn: &RtcPeerConnection) -> Receiver<String> {
                     candidate.sdp_mid().unwrap(),
                     candidate.sdp_m_line_index().unwrap()
                 );
-                log("Trying to send");
+                log(&format!("Trying to send ice candidate: {}", cand));
                 match s1.try_send(cand) {
                     Ok(_) => (),
                     Err(e) => log(&format!("Couldn't transmit ICE string: {:?}", e)),

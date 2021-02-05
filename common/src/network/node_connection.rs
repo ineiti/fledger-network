@@ -81,7 +81,7 @@ impl NodeConnection {
         self.logger.info("locking web_rtc");
         let res = {
             let conn = (self.web_rtc.lock().unwrap())(state)?;
-            Ok(WebRTCSetup::new(Arc::new(Mutex::new(conn)), state))
+            Ok(WebRTCSetup::new(Arc::new(Mutex::new(conn)), state, self.logger.clone()))
         };
         self.logger.info("unlocking web_rtc");
         res
@@ -104,6 +104,8 @@ impl NodeConnection {
         &mut self,
         pi_message: PeerMessage,
     ) -> Result<Option<PeerMessage>, String> {
+        let is_some = self.incoming_setup.as_mut().is_some();
+        self.logger.info(&format!("Process setup_incoming: {:?}", is_some));
         match self.incoming_setup.as_mut() {
             Some(web) => match web.process(pi_message).await? {
                 ProcessResult::Message(message) => {
@@ -114,10 +116,10 @@ impl NodeConnection {
                     let cb = Arc::clone(&self.cb_msg);
                     let log = self.logger.clone();
                     new_conn.set_cb_message(Box::new(move |msg| {
-                        log.info("NoCo::ppsi lock");
+                        log.info(&format!("webrtc incoming got msg: {}", msg));
                         (cb.lock().unwrap())(msg);
-                        log.info("NoCo::ppsi unlock");
                     }));
+                    self.logger.info("Setting incoming connection");
                     self.incoming = Some(new_conn);
                     return Ok(None);
                 }
@@ -127,7 +129,7 @@ impl NodeConnection {
                     let mut web = self.get_setup(WebRTCConnectionState::Follower)?;
                     match web.process(pi_message).await? {
                         ProcessResult::Message(message) => {
-                            self.outgoing_setup = Some(web);
+                            self.incoming_setup = Some(web);
                             self.logger.info("returning message");
                             return Ok(Some(message));
                         }
@@ -146,6 +148,7 @@ impl NodeConnection {
         &mut self,
         pi_message: PeerMessage,
     ) -> Result<Option<PeerMessage>, String> {
+        self.logger.info("Process setup_outgoing");
         match self.outgoing_setup.as_mut() {
             Some(web) => match web.process(pi_message).await? {
                 ProcessResult::Message(message) => {
@@ -156,10 +159,10 @@ impl NodeConnection {
                     let cb = Arc::clone(&self.cb_msg);
                     let log = self.logger.clone();
                     new_conn.set_cb_message(Box::new(move |msg| {
-                        log.info("NoCo::ppso lock");
+                        log.info(&format!("webrtc outgoing got msg: {}", msg));
                         (cb.lock().unwrap())(msg);
-                        log.info("NoCo::ppso lock");
                     }));
+                    self.logger.info("Setting outgoing connection");
                     self.outgoing = Some(new_conn);
                     return Ok(Some(PeerMessage::Done));
                 }

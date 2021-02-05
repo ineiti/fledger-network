@@ -51,25 +51,29 @@ impl Intern {
             .unwrap()
             .ws
             .set_cb_wsmessage(Box::new(move |msg| {
-                log.info("Intern::new lock");
-                int_cl.lock().unwrap().msg_cb(msg);
-                log.info("Intern::new unlock");
+                // log.info("Intern::new lock");
+                let int_cl_square = Arc::clone(&int_cl);
+                wasm_bindgen_futures::spawn_local(async move {
+                    int_cl_square.lock().unwrap().msg_cb(msg).await;
+                });
+                // log.info("Intern::new unlock");
             }));
         int
     }
 
-    fn msg_cb(&mut self, msg: WSMessage) {
+    async fn msg_cb(&mut self, msg: WSMessage) {
         match msg {
             WSMessage::MessageString(s) => {
                 self.logger.info(&format!("Got a MessageString: {:?}", s));
                 match WebSocketMessage::from_str(&s) {
                     Ok(wsm) => {
-                        self.logger.info("Intern::msg_cb executing process_msg");
-                        if let Err(err) = executor::block_on(self.process_msg(wsm.msg)) {
+                        // self.logger.info("Intern::msg_cb executing process_msg");
+                        if let Err(err) = self.process_msg(wsm.msg).await {
                             self.logger
                                 .error(&format!("Couldn't process message: {}", err))
                         }
-                        self.logger.info("Intern::msg_cb executing process_msg done");
+                        // self.logger
+                        //     .info("Intern::msg_cb executing process_msg done");
                     }
                     Err(err) => self
                         .logger
@@ -110,16 +114,16 @@ impl Intern {
                 ));
                 let remote_clone = remote.clone();
                 let rcv = Arc::clone(&self.web_rtc_rcv);
-                let log =  self.logger.clone();
+                let log = self.logger.clone();
                 let conn = self
                     .connections
                     .entry(remote.clone())
                     .or_insert(NodeConnection::new(
                         Arc::clone(&self.web_rtc),
                         Box::new(move |msg| {
-                            log.info("Intern::process_msg::PeerSetup lock");
+                            // log.info("Intern::process_msg::PeerSetup lock");
                             (rcv.lock().unwrap())(remote_clone.clone(), msg);
-                            log.info("Intern::process_msg::PeerSetup unlock");
+                            // log.info("Intern::process_msg::PeerSetup unlock");
                         }),
                         self.logger.clone(),
                     ));
@@ -184,9 +188,9 @@ impl Intern {
             .or_insert(NodeConnection::new(
                 Arc::clone(&self.web_rtc),
                 Box::new(move |msg| {
-                    log.info("Intern::send lock");
+                    // log.info("Intern::send lock");
                     (rcv.lock().unwrap())(dst_clone.clone(), msg);
-                    log.info("Intern::send unlock");
+                    // log.info("Intern::send unlock");
                 }),
                 self.logger.clone(),
             ));

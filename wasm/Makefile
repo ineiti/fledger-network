@@ -19,5 +19,5 @@ build:
 
 test:
 	cd src
-	wasm-pack test --chrome &
-	open http://localhost:8000
+	wasm-pack test --chrome
+	# open http://localhost:8000

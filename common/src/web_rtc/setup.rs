@@ -1,4 +1,6 @@
-use super::{PeerMessage, WebRTCConnection, WebRTCConnectionSetup, WebRTCConnectionState};
+
+
+use crate::ext_interface::Logger;use super::{PeerMessage, WebRTCConnection, WebRTCConnectionSetup, WebRTCConnectionState};
 use std::sync::{Arc, Mutex};
 
 pub enum ProcessResult {
@@ -9,14 +11,16 @@ pub enum ProcessResult {
 pub struct WebRTCSetup {
     setup: Arc<Mutex<Box<dyn WebRTCConnectionSetup>>>,
     mode: WebRTCConnectionState,
+    logger: Box<Logger>,
 }
 
 impl WebRTCSetup {
     pub fn new(
         setup: Arc<Mutex<Box<dyn WebRTCConnectionSetup>>>,
         mode: WebRTCConnectionState,
+        logger: Box<Logger>,
     ) -> WebRTCSetup {
-        WebRTCSetup { setup, mode }
+        WebRTCSetup { setup, mode, logger }
     }
 
     /// Process treats each incoming message by updating the WebRTCConnectionSetup
@@ -53,7 +57,7 @@ impl WebRTCSetup {
                 Ok(ProcessResult::Message(PeerMessage::IceFollow(ice)))
             }
             PeerMessage::IceFollow(ice) => {
-                self.assert_follow("Only initializer can treat IceFollow")?;
+                self.assert_init("Only initializer can treat IceFollow")?;
                 setup.ice_put(ice).await?;
                 let conn = setup.get_connection().await?;
                 Ok(ProcessResult::Connection(conn))

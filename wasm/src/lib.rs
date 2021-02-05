@@ -98,9 +98,8 @@ impl Component for Model {
     }
 
     fn view(&self) -> Html {
-        console_log!("Locking string");
         let str = self.log_str.lock().unwrap();
-        let h = html! {
+        html! {
             <div class="main">
                 <div class="ui">
                     <div>
@@ -111,9 +110,7 @@ impl Component for Model {
                     </div>
                 </div>
             </div>
-        };
-        console_log!("Unlocking string");
-        h
+        }
     }
 }
 
