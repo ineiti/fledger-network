@@ -6,7 +6,6 @@ use crate::{
     ext_interface::Logger,
     web_rtc::{WSSignalMessage, WebSocketMessage},
 };
-use futures::executor;
 
 use crate::network::node_connection::NodeConnection;
 use crate::network::WebRTCReceive;
@@ -36,7 +35,6 @@ impl Intern {
         logger: Box<dyn Logger>,
         node_info: NodeInfo,
     ) -> Arc<Mutex<Intern>> {
-        let log = logger.clone();
         let int = Arc::new(Mutex::new(Intern {
             ws,
             web_rtc: Arc::new(Mutex::new(web_rtc)),
@@ -51,12 +49,10 @@ impl Intern {
             .unwrap()
             .ws
             .set_cb_wsmessage(Box::new(move |msg| {
-                // log.info("Intern::new lock");
                 let int_cl_square = Arc::clone(&int_cl);
                 wasm_bindgen_futures::spawn_local(async move {
                     int_cl_square.lock().unwrap().msg_cb(msg).await;
                 });
-                // log.info("Intern::new unlock");
             }));
         int
     }
@@ -64,16 +60,12 @@ impl Intern {
     async fn msg_cb(&mut self, msg: WSMessage) {
         match msg {
             WSMessage::MessageString(s) => {
-                self.logger.info(&format!("Got a MessageString: {:?}", s));
                 match WebSocketMessage::from_str(&s) {
                     Ok(wsm) => {
-                        // self.logger.info("Intern::msg_cb executing process_msg");
                         if let Err(err) = self.process_msg(wsm.msg).await {
                             self.logger
                                 .error(&format!("Couldn't process message: {}", err))
                         }
-                        // self.logger
-                        //     .info("Intern::msg_cb executing process_msg done");
                     }
                     Err(err) => self
                         .logger
@@ -108,27 +100,19 @@ impl Intern {
                         return Err("Got alien PeerSetup".to_string());
                     }
                 };
-                self.logger.info(&format!(
-                    "Got PeerSetup with init/follow {}/{}",
-                    pi.id_init, pi.id_follow
-                ));
                 let remote_clone = remote.clone();
                 let rcv = Arc::clone(&self.web_rtc_rcv);
-                let log = self.logger.clone();
                 let conn = self
                     .connections
                     .entry(remote.clone())
                     .or_insert(NodeConnection::new(
                         Arc::clone(&self.web_rtc),
                         Box::new(move |msg| {
-                            // log.info("Intern::process_msg::PeerSetup lock");
                             (rcv.lock().unwrap())(remote_clone.clone(), msg);
-                            // log.info("Intern::process_msg::PeerSetup unlock");
                         }),
                         self.logger.clone(),
                     ));
 
-                self.logger.info("Process peer setup");
                 if let Some(message) = conn
                     .process_peer_setup(pi.message, remote == pi.id_init)
                     .await?
@@ -161,14 +145,11 @@ impl Intern {
 
     /// Stores a node list sent from the signalling server.
     fn update_list(&mut self, list: Vec<NodeInfo>) {
-        self.logger.info(&format!("Got new list: {:?}", list));
         self.list = list
             .iter()
             .filter(|entry| entry.public != self.node_info.public)
             .cloned()
             .collect();
-        self.logger
-            .info(&format!("Reduced list is: {:?}", self.list));
     }
 
     /// Sends a message to the node dst.
@@ -181,16 +162,13 @@ impl Intern {
         self.logger.info(&format!("Sending to {}: {}", dst, msg));
         let dst_clone = dst.clone();
         let rcv = Arc::clone(&self.web_rtc_rcv);
-        let log = self.logger.clone();
         let conn = self
             .connections
             .entry(dst.clone())
             .or_insert(NodeConnection::new(
                 Arc::clone(&self.web_rtc),
                 Box::new(move |msg| {
-                    // log.info("Intern::send lock");
                     (rcv.lock().unwrap())(dst_clone.clone(), msg);
-                    // log.info("Intern::send unlock");
                 }),
                 self.logger.clone(),
             ));

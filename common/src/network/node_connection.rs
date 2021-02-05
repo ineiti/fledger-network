@@ -78,12 +78,10 @@ impl NodeConnection {
     }
 
     pub fn get_setup(&self, state: WebRTCConnectionState) -> Result<WebRTCSetup, String> {
-        self.logger.info("locking web_rtc");
         let res = {
             let conn = (self.web_rtc.lock().unwrap())(state)?;
             Ok(WebRTCSetup::new(Arc::new(Mutex::new(conn)), state, self.logger.clone()))
         };
-        self.logger.info("unlocking web_rtc");
         res
     }
 
@@ -104,8 +102,6 @@ impl NodeConnection {
         &mut self,
         pi_message: PeerMessage,
     ) -> Result<Option<PeerMessage>, String> {
-        let is_some = self.incoming_setup.as_mut().is_some();
-        self.logger.info(&format!("Process setup_incoming: {:?}", is_some));
         match self.incoming_setup.as_mut() {
             Some(web) => match web.process(pi_message).await? {
                 ProcessResult::Message(message) => {
@@ -114,14 +110,11 @@ impl NodeConnection {
                 ProcessResult::Connection(new_conn) => {
                     self.incoming_setup = None;
                     let cb = Arc::clone(&self.cb_msg);
-                    let log = self.logger.clone();
                     new_conn.set_cb_message(Box::new(move |msg| {
-                        log.info(&format!("webrtc incoming got msg: {}", msg));
                         (cb.lock().unwrap())(msg);
                     }));
-                    self.logger.info("Setting incoming connection");
                     self.incoming = Some(new_conn);
-                    return Ok(None);
+                    return Ok(Some(PeerMessage::DoneFollow));
                 }
             },
             None => {
@@ -130,7 +123,6 @@ impl NodeConnection {
                     match web.process(pi_message).await? {
                         ProcessResult::Message(message) => {
                             self.incoming_setup = Some(web);
-                            self.logger.info("returning message");
                             return Ok(Some(message));
                         }
                         _ => return Err("couldn't start webrtc handshake".to_string()),
@@ -148,7 +140,6 @@ impl NodeConnection {
         &mut self,
         pi_message: PeerMessage,
     ) -> Result<Option<PeerMessage>, String> {
-        self.logger.info("Process setup_outgoing");
         match self.outgoing_setup.as_mut() {
             Some(web) => match web.process(pi_message).await? {
                 ProcessResult::Message(message) => {
@@ -162,25 +153,36 @@ impl NodeConnection {
                         log.info(&format!("webrtc outgoing got msg: {}", msg));
                         (cb.lock().unwrap())(msg);
                     }));
-                    self.logger.info("Setting outgoing connection");
                     self.outgoing = Some(new_conn);
-                    return Ok(Some(PeerMessage::Done));
+                    return Ok(Some(PeerMessage::DoneInit));
                 }
             },
             None => {
-                if pi_message != PeerMessage::Init {
-                    return Err(
-                        "Can only start outgoing webrtc setup with Init message".to_string()
-                    );
-                }
-                let mut web = self.get_setup(WebRTCConnectionState::Initializer)?;
-                match web.process(PeerMessage::Init).await? {
-                    ProcessResult::Message(message) => {
-                        self.outgoing = None;
-                        self.outgoing_setup = Some(web);
-                        return Ok(Some(message));
+                match pi_message{
+                    PeerMessage::Init => {
+                        let mut web = self.get_setup(WebRTCConnectionState::Initializer)?;
+                        match web.process(PeerMessage::Init).await? {
+                            ProcessResult::Message(message) => {
+                                self.outgoing = None;
+                                self.outgoing_setup = Some(web);
+                                return Ok(Some(message));
+                            }
+                            _ => return Err("couldn't start webrtc handshake".to_string()),
+                        }
                     }
-                    _ => return Err("couldn't start webrtc handshake".to_string()),
+                    PeerMessage::DoneFollow => {
+                        for msg in self.outgoing_queue.iter() {
+                            if let Some(conn) = self.outgoing.as_mut(){
+                                conn.send(msg.to_string())?;
+                            }
+                        }
+                        return Ok(None)
+                    }
+                    _ => {
+                        return Err(
+                            "Can only start outgoing webrtc setup with Init message".to_string()
+                        );
+                    }
                 }
             }
         }

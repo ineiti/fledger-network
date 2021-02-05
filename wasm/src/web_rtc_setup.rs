@@ -87,9 +87,7 @@ impl WebRTCConnectionSetupWasm {
     async fn is_setup(&mut self) -> Result<(), String> {
         if self.dc.is_none() {
             self.is_not_setup()?;
-            log("Waiting for RtcDataChannel");
             for _ in 0u8..10 {
-                log("ch_dc.try_iter");
                 match self.ch_dc.try_iter().next() {
                     Some(dc) => {
                         log(&format!("Found RDC: {:?}", dc.ready_state()));
@@ -98,7 +96,6 @@ impl WebRTCConnectionSetupWasm {
                     }
                     None => wait_ms(1000).await,
                 }
-                log("ch_dc.try_iter loop");
             }
             return Err("This method is only available once setup is complete".to_string());
         }
@@ -203,15 +200,12 @@ impl WebRTCConnectionSetup for WebRTCConnectionSetupWasm {
     async fn ice_string(&mut self) -> Result<String, String> {
         self.is_not_setup()?;
         for _ in 0..10 {
-            log("Trying to get ice");
             match self.ch_ice.try_iter().next() {
                 Some(s) => {
-                    log("Got ice");
                     return Ok(s);
                 }
                 None => (),
             };
-            log("Sleeping before getting ice again");
             wait_ms(1000).await;
         }
         Err("Didn't get ICE in time".to_string())
@@ -258,7 +252,6 @@ fn ice_start(rp_conn: &RtcPeerConnection) -> Receiver<String> {
     let (s1, r1) = mpsc::sync_channel::<String>(1);
 
     let onicecandidate_callback1 = Closure::wrap(Box::new(move |ev: RtcPeerConnectionIceEvent| {
-        log(&format!("Going for ICE: {:?}", ev));
         match ev.candidate() {
             Some(candidate) => {
                 let cand = format!(
@@ -267,7 +260,6 @@ fn ice_start(rp_conn: &RtcPeerConnection) -> Receiver<String> {
                     candidate.sdp_mid().unwrap(),
                     candidate.sdp_m_line_index().unwrap()
                 );
-                log(&format!("Trying to send ice candidate: {}", cand));
                 match s1.try_send(cand) {
                     Ok(_) => (),
                     Err(e) => log(&format!("Couldn't transmit ICE string: {:?}", e)),
@@ -285,9 +277,7 @@ fn ice_start(rp_conn: &RtcPeerConnection) -> Receiver<String> {
 fn dc_create_init(rp_conn: &RtcPeerConnection) -> Result<Receiver<RtcDataChannel>, String> {
     let dc = rp_conn.create_data_channel("data-channel");
     let (dc_send, dc_rcv) = mpsc::sync_channel::<RtcDataChannel>(1);
-    log("Sending dc over channel");
     dc_send.send(dc).map_err(|err| err.to_string())?;
-    log("Sent dc over channel");
     Ok(dc_rcv)
 }
 
@@ -295,11 +285,6 @@ fn dc_create_follow(rp_conn: &RtcPeerConnection) -> Receiver<RtcDataChannel> {
     let (dc_send, dc_rcv) = mpsc::sync_channel::<RtcDataChannel>(1);
     let ondatachannel_callback = Closure::wrap(Box::new(move |ev: RtcDataChannelEvent| {
         let dc = ev.channel();
-        log(&format!(
-            "ondatachannel: {:?} in state {:?}",
-            dc.label(),
-            dc.ready_state()
-        ));
         match dc_send.send(dc) {
             Err(e) => log(&format!("Error while sending dc: {:?}", e)),
             _ => (),

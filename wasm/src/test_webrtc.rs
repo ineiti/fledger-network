@@ -108,13 +108,13 @@ impl WebSocketConnectionDummy {
         }
     }
 
-    fn clone(&self) -> WebSocketConnectionDummy {
-        WebSocketConnectionDummy {
-            msg_queue: Rc::clone(&self.msg_queue),
-            id: self.id,
-            cb: Rc::clone(&self.cb),
-        }
-    }
+    // fn clone(&self) -> WebSocketConnectionDummy {
+    //     WebSocketConnectionDummy {
+    //         msg_queue: Rc::clone(&self.msg_queue),
+    //         id: self.id,
+    //         cb: Rc::clone(&self.cb),
+    //     }
+    // }
 }
 
 impl WebSocketConnection for WebSocketConnectionDummy {
@@ -183,8 +183,8 @@ async fn connect_test_simple() -> Result<(), String> {
         }
         wait_ms(1000).await;
     }
-    node1.send(&node2.info.public, "ping".to_string()).await?;
-    node2.send(&node1.info.public, "pong".to_string()).await?;
+    // node1.send(&node2.info.public, "ping".to_string()).await?;
+    // node2.send(&node1.info.public, "pong".to_string()).await?;
     Ok(())
 }
 

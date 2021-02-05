@@ -61,7 +61,8 @@ pub enum PeerMessage {
     Answer(String),
     IceInit(String),
     IceFollow(String),
-    Done,
+    DoneInit,
+    DoneFollow,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

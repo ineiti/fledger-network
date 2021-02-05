@@ -135,10 +135,8 @@ impl Model {
     fn node_list(&self) {
         if let Some(n) = self.node_copy() {
             wasm_bindgen_futures::spawn_local(async move {
-                console_log!("node_list locking");
                 let mut node = n.lock().unwrap();
                 node.list().await;
-                console_log!("node_list locking");
             });
         }
     }
@@ -146,10 +144,8 @@ impl Model {
     fn node_ping(&self) {
         if let Some(n) = self.node_copy() {
             wasm_bindgen_futures::spawn_local(async move {
-                console_log!("node locking");
                 let mut node = n.lock().unwrap();
                 node.ping().await;
-                console_log!("node unlocking");
             });
         }
     }

@@ -21,12 +21,14 @@ pub struct ServerState {
 /// - handle webrtc signalling setup
 impl ServerState {
     pub fn new(logger: Box<dyn Logger>, mut ws: Box<dyn WebSocketServer>) -> ServerState {
-        let int = Internal::new(logger);
-        let int_cl = Arc::clone(&int);
+        let ss = ServerState{
+            int: Internal::new(logger),
+        };
+        let int_cl = Arc::clone(&ss.int);
         ws.set_cb_connection(Box::new(move |conn| {
             ServerState::cb_connection(Arc::clone(&int_cl), conn)
         }));
-        ServerState { int }
+        ss
     }
 
     /// Treats new connections from websockets.

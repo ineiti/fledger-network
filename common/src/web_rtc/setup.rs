@@ -11,14 +11,14 @@ pub enum ProcessResult {
 pub struct WebRTCSetup {
     setup: Arc<Mutex<Box<dyn WebRTCConnectionSetup>>>,
     mode: WebRTCConnectionState,
-    logger: Box<Logger>,
+    logger: Box<dyn Logger>,
 }
 
 impl WebRTCSetup {
     pub fn new(
         setup: Arc<Mutex<Box<dyn WebRTCConnectionSetup>>>,
         mode: WebRTCConnectionState,
-        logger: Box<Logger>,
+        logger: Box<dyn Logger>,
     ) -> WebRTCSetup {
         WebRTCSetup { setup, mode, logger }
     }
@@ -30,6 +30,7 @@ impl WebRTCSetup {
     /// send the PeerMessage::Done to the follower, so that it also creates the
     /// connection.
     pub async fn process(&mut self, pm: PeerMessage) -> Result<ProcessResult, String> {
+        self.logger.info(&format!("Processing {:?}", pm));
         let mut setup = self.setup.lock().unwrap();
         match pm {
             PeerMessage::Init => {
@@ -62,10 +63,13 @@ impl WebRTCSetup {
                 let conn = setup.get_connection().await?;
                 Ok(ProcessResult::Connection(conn))
             }
-            PeerMessage::Done => {
-                self.assert_follow("Only follower can treat Done")?;
+            PeerMessage::DoneInit => {
+                self.assert_follow("Only follower can treat DoneInit")?;
                 let conn = setup.get_connection().await?;
                 Ok(ProcessResult::Connection(conn))
+            }
+            PeerMessage::DoneFollow => {
+                Err("Cannot treat DoneFollow".to_string())
             }
         }
     }

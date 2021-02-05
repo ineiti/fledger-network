@@ -40,7 +40,7 @@ impl Node {
         // let logic = Logic::new(config.our_node.clone());
         let log_clone = logger.clone();
         let web_rtc_rcv: WebRTCReceive = Arc::new(Mutex::new(Box::new(move |id, msg| {
-            log_clone.info(&format!("id: {}, msg: {}", id, msg))
+            log_clone.info(&format!("Got msg id: {}, msg: {}", id, msg))
         })));
         let network = Network::new(
             ws,
